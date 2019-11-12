@@ -160,7 +160,7 @@ impl<'a, R: RealField + Float> TimePartHaml<'a, R>
             let vecs_end = get_eigs(t1);
             let projector = (vecs_init.ad_mul(&vecs_mid)) * (vecs_mid.ad_mul(&vecs_end));
             let id1 = change_basis(&id0, &projector);
-            let trace_loss = (id1.trace() as Complex<R>).re.to_f64().unwrap();
+            let trace_loss = 1.0 - (id1.trace() as Complex<R>).re.to_subset().unwrap()/(strength as f64);
             if trace_loss > tol {
                 let order = (1.0 + (trace_loss.abs() / tol).log2()).round() as usize;
                 info!("Partition {}/{} will be refined: Tr Loss={}, r={}",
