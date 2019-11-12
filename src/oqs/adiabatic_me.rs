@@ -325,7 +325,7 @@ impl<'a, B: Bath<f64>> AME<'a, B> {
 
 }
 
-pub fn solve_ame<B: Bath<f64>>(ame: &mut AME<B>, initial_state: Op<f64>) -> Op<f64>{
+pub fn solve_ame<B: Bath<f64>>(ame: &mut AME<B>, initial_state: Op<f64>, tol: f64) -> Op<f64>{
     let partitions  = ame.haml.partitions().to_owned();
     let n = ame.haml.basis_size() as usize;
     let mut norm_est = condest::Normest1::new(n, 2);
@@ -353,9 +353,9 @@ pub fn solve_ame<B: Bath<f64>>(ame: &mut AME<B>, initial_state: Op<f64>) -> Op<f
         let mut rhodag = rho0.clone();
         let mut solver = ExpCFMSolver::new(
             f, norm_fn,ti0, tif, rho0,  dt, split)
-            .with_tolerance(1.0e-6, 1.0e-6)
+            .with_tolerance(1.0e-6, tol)
             .with_step_range(dt*1.0e-4,
-                             dt*1.0e3)
+                             dt*10.0)
             .with_init_step(dt);
         while let ODEState::Ok(step) = solver.step(){
             //Enforce Hermiticity after each step
@@ -432,7 +432,7 @@ mod tests{
         println!("Initial adiabatic density matrix:\n{}", rho0);
         println!("Action at tf/2:\n{}", rho1);
 
-        let rhof = solve_ame(&mut ame, rho0);
+        let rhof = solve_ame(&mut ame, rho0, 1.0e-6);
 
         println!("Final density matrix:\n{}", rhof);
     }
@@ -484,7 +484,7 @@ mod tests{
 //
 //        println!("Action at tf/2:\n{}", rho1);
 
-        let rhof = solve_ame(&mut ame, rho0);
+        let rhof = solve_ame(&mut ame, rho0, 1.0e-6);
 
         println!("Final density matrix:\n{}", rhof);
     }
