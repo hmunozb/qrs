@@ -151,8 +151,6 @@ impl<'a, R: RealField + Float> TimePartHaml<'a, R>
         let mut new_time_intervals: Vec<R> = Vec::new();
         let mut vecs_init = get_eigs(&t0);
 
-        new_time_intervals.push(t0.clone());
-
         for (i, (t1, tmid)) in self.time_partitions.iter().skip(1)
             .zip(self.partition_midpoints.iter())
             .enumerate() {
@@ -161,11 +159,15 @@ impl<'a, R: RealField + Float> TimePartHaml<'a, R>
             let projector = (vecs_init.ad_mul(&vecs_mid)) * (vecs_mid.ad_mul(&vecs_end));
             let id1 = change_basis(&id0, &projector);
             let trace_loss = 1.0 - (id1.trace() as Complex<R>).re.to_subset().unwrap()/(strength as f64);
+            new_time_intervals.push(t0.clone());
             if trace_loss > tol {
                 let order = (1.0 + (trace_loss.abs() / tol).log2()).round() as usize;
                 info!("Partition {}/{} will be refined: Tr Loss={}, r={}",
                       i, num_partitions, trace_loss, order);
-                for new_t in linspace(t0.clone(), t1.clone(), 1 + order) {
+                //linspace is endpoint inclusive
+                //we only need to append the intermediate refinement points
+                for new_t in linspace(t0.clone(), t1.clone(), 2 + order)
+                                    .take(order + 1).skip(1) {
                     new_time_intervals.push(new_t);
                 }
             }
