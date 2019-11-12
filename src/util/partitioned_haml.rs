@@ -54,10 +54,12 @@ impl<'a, R: RealField + Float> TimePartHaml<'a, R>
         let tf = time_partitions.first().unwrap().clone();
 
         let time_range = (t0.clone(), tf.clone());
-        let partition_midpoints: Vec<R> =
+        let mut partition_midpoints: Vec<R> =
             Vec::from_iter(time_partitions.iter()
                 .skip(1).zip(time_partitions.iter())
                 .map(|(a1, a0)| (a0.clone() + a1.clone()) / R::from_f64(2.0).unwrap()));
+        // Nudge the final representative time to the end
+        *partition_midpoints.last_mut().unwrap() = tf;
         let basis_sequence = Vec::new();
         let projector_sequence = Vec::new();
         let haml_sequence = Vec::new();
