@@ -11,7 +11,7 @@ use crate::base::dense::*;
 use blas_traits::BlasScalar;
 use crate::util::{EigResolver, EigJob, EigRangeData, outer_zip_to, change_basis_to, change_basis, unchange_basis};
 use std::iter::FromIterator;
-use nalgebra::DMatrix;
+use nalgebra::{DMatrix, Dynamic, Matrix};
 use itertools::Itertools;
 
 ///Defines the exponential e^{-i H} for a Hermitian operator H
@@ -89,6 +89,44 @@ impl<T: RealField+Float> ExponentialSplit<T, Complex<T>, Op<T>> for DenMatExpiSp
         u_vec
     }
 }
+
+pub struct DenMatPerturbExpSplit<T: RealField>
+    where Complex<T> : BlasScalar{
+    n: usize,
+    expm: Expm<Complex<T>>
+}
+impl<T: RealField> DenMatPerturbExpSplit<T>
+where Complex<T> : BlasScalar{
+    pub fn new(n: u32) -> Self{
+        Self{n: n as usize, expm: Expm::new(n as usize )}
+    }
+}
+impl<T: RealField> ExponentialSplit<T, Complex<T>, Op<T>> for DenMatPerturbExpSplit<T>
+where Complex<T> : BlasScalar
+{
+    type L = Op<T>;
+    type U = Op<T>;
+
+    fn lin_zero(&self) -> Self::L {
+        Op::zeros(self.n, self.n)
+    }
+
+    fn exp(&mut self, l: &Self::L) -> Self::U {
+        let n = self.n;
+        let arr = ArrayView2::from_shape((n,n), & l.as_slice()).unwrap();
+        let mut exp_arr = Array2::zeros((n,n));
+        self.expm.expm(&arr, &mut exp_arr);
+        let exp_map: Op<T> = Op::from_vec(n, n, exp_arr.into_owned().into_raw_vec());
+
+        exp_map
+    }
+
+    fn map_exp(&mut self, u: &Self::U, x: &Op<T>) -> Op<T> {
+        //u.ad_mul(x) * u
+        u * (x * &u.adjoint())
+    }
+}
+
 
 impl<T: RealField+Float> Commutator<T, Complex<T>, Op<T>> for DenMatExpiSplit<T>
     where Complex<T> : BlasScalar + ComplexField<RealField=T>{

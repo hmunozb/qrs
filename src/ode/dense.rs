@@ -154,7 +154,7 @@ pub fn solve_se_cfm42<'a, R: RealField+Float>(
 ) -> Ket<R>
     where Complex<R> : BlasScalar + ComplexField<RealField=R>
 {
-    let f = |t_arr: &[R]| {
+    let f = |t_arr: &[R], _| {
         Vec::from_iter(
             t_arr.iter().map( |t|H.eval(t.clone()) ) )};
     let norm_fn = |v: &Ket<R>|{ v.norm() };

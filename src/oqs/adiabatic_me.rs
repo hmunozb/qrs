@@ -3,29 +3,38 @@ use crate::base::quantum::{QRep};
 use crate::base::dense::*;
 use crate::oqs::bath::Bath;
 use crate::ode::dense::DenseExpiSplit;
-use crate::ode::super_op::{KineticExpSplit, CoherentExpSplit, DenMatExpiSplit};
+use crate::ode::super_op::{KineticExpSplit, CoherentExpSplit, DenMatExpiSplit, DenMatPerturbExpSplit};
 use alga::general::{ComplexField, RealField};
+use crate::approx::AbsDiffEq;
 use blas_traits::BlasScalar;
+use log::{info, error, warn, trace};
 use num_traits::{Zero, Float};
 use num_complex::Complex;
 use num_complex::Complex64 as c64;
 use nalgebra::{DVector, DMatrix};
-use vec_ode::exp::split_exp::{SemiComplexO4ExpSplit, CommutativeExpSplit, TripleJumpExpSplit};
+use smallvec::SmallVec;
+use vec_ode::exp::split_exp::{SemiComplexO4ExpSplit, StrangSplit,
+                              CommutativeExpSplit, TripleJumpExpSplit,
+                              RKNR4ExpSplit};
 use itertools::Itertools;
 use vec_ode::exp::{DirectSumL, ExponentialSplit};
 use ndarray_stats::*;
 use ndarray::{ArrayBase, Array, Array1, Array2, ArrayView2, ShapeBuilder};
-use vec_ode::{ODEState, ODEStep, ODESolver, ODESolverBase};
+use vec_ode::{ODEState, ODEStep, ODESolver, ODESolverBase, ODEError, LinearCombination};
 use vec_ode::exp::cfm::ExpCFMSolver;
 use vec_ode::AdaptiveODESolver;
-
+use crate::util::degen::{handle_degeneracies, degeneracy_detect, handle_degeneracies_vals, handle_phases, handle_relative_phases, handle_degeneracies_relative, qr_ortho, handle_degeneracies_relative_vals};
+use crate::util::diff::four_point_gl;
 //use alga::linear::NormedSpace;
 
 type AMEDissipatorSplit<T> = CommutativeExpSplit<T, Complex<T>, Op<T>,
                                 KineticExpSplit<T>,
                                 CoherentExpSplit>;
-type AdiabaticMEExpSplit<T> = TripleJumpExpSplit<T, Complex<T>, Op<T>,
-                                DenMatExpiSplit<T>,
+type AMEHamiltonianSplit<T> = RKNR4ExpSplit<T, Complex<T>, Op<T>,
+                                CoherentExpSplit,
+                                DenMatPerturbExpSplit<T>>;
+type AdiabaticMEExpSplit<T> = SemiComplexO4ExpSplit<T, Complex<T>, Op<T>,
+                                AMEHamiltonianSplit<T>,
                                 AMEDissipatorSplit<T>>;
 
 type AdiabaticMEL<T> = <AdiabaticMEExpSplit<T> as ExponentialSplit<T, Complex<T>, Op<T>>>::L;
@@ -34,12 +43,15 @@ fn make_ame_split<T: RealField + Float>(n: u32) -> AdiabaticMEExpSplit<T>
 where Complex<T> : BlasScalar + ComplexField<RealField=T>
 {
     let split = AdiabaticMEExpSplit::<T>::new(
-        DenMatExpiSplit::new(n),
+        AMEHamiltonianSplit::new(
+            CoherentExpSplit::new(n),
+                    DenMatPerturbExpSplit::new(n),
+            //DenMatExpiSplit::new(n)
+             ),
         AMEDissipatorSplit::new(
              KineticExpSplit::new(n),
              CoherentExpSplit::new(n),)
     );
-
 
     split
 }
@@ -70,7 +82,8 @@ impl<R: RealField> AMEWorkpad<R>{
                 lind_coh_2: DMatrix::zeros(n,n),
                 diag_gamma_0:  DMatrix::zeros(n, n),
                 lamb_shift: DMatrix::zeros(n, n),
-                ztemp0: DMatrix::zeros(n,n)}
+                ztemp0: DMatrix::zeros(n,n)
+        }
     }
 }
 
@@ -106,9 +119,10 @@ fn ame_liouvillian<R: RealField, B: Bath<R>>(
 where Complex<R> : ComplexField<RealField=R>+BlasScalar
 {
     assert_eq!(lindblad_ops.len(), work.linds_ab.len(), "Number of lindblad operators mismatched");
-    let one_half = R::from_subset(&(-0.5_f64));
+    let one_half = R::from_subset(&(0.5_f64));
 
     //                  TRANSITION FREQUENCIES AND HAMILTONIAN
+    // In the adiabatic basis -i [H, rho][a,b] = -i omega[a,b] rho[a,b]
     // omega[i,j] = vals[i] - vals[j]
     outer_zip_to(vals, vals, &mut work.omega, |a, b| *a - *b);
     copy_transmute_to(& work.omega, haml);
@@ -151,8 +165,9 @@ where Complex<R> : ComplexField<RealField=R>+BlasScalar
 
     //
     //  LAMB SHIFT EVALUATION
-    //  The quantity sum_{alpha} abs( A[a,b] ).^2 is currently stored in lind_pauli
-    //  and can be use to evaluate the lamb_shift
+    //  While we're here:
+    //    The quantity sum_{alpha} abs( A[a,b] ).^2 is currently stored in lind_pauli
+    //    and can be use to evaluate the lamb_shift
     //
     if bath.has_lamb_shift(){
         for(s, &w) in work.lamb_shift.iter_mut().zip(work.omega.iter()){
@@ -160,13 +175,14 @@ where Complex<R> : ComplexField<RealField=R>+BlasScalar
         }
         work.lamb_shift.component_mul_assign(&lind_pauli);
         let hls = work.lamb_shift.row_sum_tr();
+
         outer_zip_to(&hls, &hls, &mut work.lamb_shift,
                      |&a, &b| a - b);
         work.lamb_shift *= -Complex::i();
         *haml += &work.lamb_shift;
     }
 
-    // Back to Pauli rates
+    // Back to the Pauli rates
     lind_pauli.zip_apply(&work.gamma,
                                |s, g| s*Complex::from(g));
 
@@ -178,17 +194,23 @@ where Complex<R> : ComplexField<RealField=R>+BlasScalar
        *g0 = g1.sum();
     }
 
-    // Finally
-    // pauli_mat = E_Gamma_offdiag - diag(Out_rate)
+    // and finally
+    //                  pauli_mat = E_Gamma_offdiag - diag(Out_rate)
+    //              *******************************************************
     for i in 0..lind_pauli.nrows(){
         lind_pauli[(i,i)] =  -work.gamma_out[i];
     }
 
+
     //                      LINDBLAD COHERENT MATRIX EVALUATION
-    //  Sum of two terms:
-    // Lind_coh_1 = -(1.0 / 2.0) * (Out_rate[:, np.newaxis] + Out_rate[np.newaxis, :])
+    //               *******************************************************
+
+
+    //          Lind_coh_1 = -(1.0 / 2.0) * (Out_rate[:, np.newaxis] + Out_rate[np.newaxis, :])
+    //                *******************************************************
     outer_zip_to(&work.gamma_out, &work.gamma_out, &mut work.lind_coh_1,
-        |a, b|  Complex::from(one_half) * ( a + b));
+        |a, b|
+                            - Complex::from(one_half) * ( a + b));
 
     // diag_A_sum = np.sum(np.conj(diag_A[:,  :, np.newaxis]) * diag_A[:, np.newaxis, :], axis=0)
     for l_ab in work.linds_ab.iter(){
@@ -203,19 +225,32 @@ where Complex<R> : ComplexField<RealField=R>+BlasScalar
     //G0[a,b] = gamma[0,0] * diag_A_sum
     work.diag_gamma_0.scale_mut(work.gamma[(0, 0)]);
 
-    // Lind_coh_2 = G0[a, b]* - (1/2)(G0[a,a] + G0[b,b])
+    //
+    //                          Lind_coh_2 = G0[a, b]* - (1/2)(G0[a,a] + G0[b,b])
+    //                      *******************************************************
     let n = work.lind_coh_2.ncols();
     for i in 0..n{
         for j in 0..n{
+
             work.lind_coh_2[(i,j)] = work.diag_gamma_0[(j,i)]
-                - Complex::from(one_half) * (
-                    work.diag_gamma_0[(i,i)] + work.diag_gamma_0[(j,j)] )
+                - Complex::from(one_half) * (work.diag_gamma_0[(i,i)] + work.diag_gamma_0[(j,j)] )
         }
     }
 
     lind_coh.copy_from(&work.lind_coh_1);
     *lind_coh += &work.lind_coh_2;
     lind_coh.fill_diagonal(Complex::zero());
+}
+
+
+
+fn assert_orthogonal<T>(v:& DMatrix<Complex<T>>)
+where T: RealField
+{
+    let vad = v.adjoint();
+    let mut vv : DMatrix<Complex<T>> = vad * v;
+
+    assert!(vv.is_identity(T::from_subset(&1.0e-9)), "Orthogonal assertion failed");
 }
 
 pub struct AMEResults{
@@ -235,7 +270,10 @@ pub struct AME<'a, B: Bath<f64>>{
     lind_pauli: Op<f64>,
     lind_coh: Op<f64>,
     eigvecs: Op<f64>,
-    bath: &'a B
+    eigvals: DVector<f64>,
+    bath: &'a B,
+    prev_t: Option<(f64,f64)>,
+    prev_eigvecs: (Op<f64>, Op<f64>)
 }
 
 impl<'a, B: Bath<f64>> AME<'a, B> {
@@ -257,7 +295,11 @@ impl<'a, B: Bath<f64>> AME<'a, B> {
             lind_pauli: Op::zeros(n, n),
             lind_coh: Op::zeros(n, n),
             eigvecs: Op::zeros(n, n),
-            bath};
+            eigvals: DVector::zeros(n),
+            bath,
+            prev_t: None,
+            prev_eigvecs: (Op::zeros(n,n), Op::zeros(n,n))
+        };
         me.load_partition(0);
         me
     }
@@ -267,109 +309,429 @@ impl<'a, B: Bath<f64>> AME<'a, B> {
     /// (todo: should be modified when adaptive basis sizes are available)
     fn load_partition(&mut self, p: usize){
         self.p_lindblad_ops.clear();
+        match self.prev_t{
+            None => {},
+            Some((t0, tf)) =>{
+                if p > 0 {
+                    //let ep0 = self.haml.advance_partition(&self.prev_eigvecs.0, p-1);
+                    //let epf = self.haml.advance_partition(&self.prev_eigvecs.1, p-1);
+                    let proj = self.haml.projector(p-1);
+                    let mut ep0 = proj.ad_mul(&self.prev_eigvecs.0);
+                    let mut epf = proj.ad_mul(&self.prev_eigvecs.1);
+
+                    //let eq0 = qr_ortho(ep0);
+                    //let eqf = qr_ortho(epf);
+                    let (vals0, mut ev0) = self.haml.eig_p(t0, Some(p));
+                    let (valsf, mut evf) = self.haml.eig_p(tf, Some(p));
+                    handle_degeneracies_relative_vals(&vals0, &mut ev0, &ep0, None);
+                    handle_degeneracies_relative_vals(&valsf, &mut evf, &epf, None);
+                    let mut rank_loss = handle_relative_phases(&mut ev0, &ep0, &mut self.work.ztemp0);
+                    rank_loss += handle_relative_phases(&mut evf, &epf, &mut self.work.ztemp0);
+                    if rank_loss > 0{
+                        warn!("{} adiabatic rank(s) scattered going into partition {}", rank_loss, p);
+                    }
+                    self.prev_eigvecs.0 = ev0;
+                    self.prev_eigvecs.1 = evf;
+                }
+            }
+        }
+        //self.prev_t = None;
         for lind in self.lindblad_ops{
             self.p_lindblad_ops.push(self.haml.transform_to_partition(lind, p ));
         }
     }
 
-    pub fn adiabatic_lind(&mut self, t: f64, p: usize){
+    /// Loads the eigenvalues and eigenvectors of time t
+    /// No gauge or degeneracy handling
+    fn load_eigv(&mut self, t: f64, p: usize, degen_handle: bool){
         let (vals, vecs) =
             self.haml.eig_p(t, Some(p ));
         self.eigvecs = vecs;
-        ame_liouvillian(self.bath, &mut self.work, &vals, &self.eigvecs,
+        self.eigvals = vals;
+    }
+
+    /// Loads the eigenvalues and eigenvectors of time t
+    /// with degeneracy handling
+    fn load_eigv_degen_handle(&mut self, t: f64, p: usize, v0: &Op<f64>){
+        let (vals, vecs) =
+            self.haml.eig_p(t, Some(p ));
+        self.eigvecs = vecs;
+        self.eigvals = vals;
+
+        let degens = degeneracy_detect(&self.eigvals, None);
+        if degens.len() > 0{
+            handle_degeneracies_relative(&degens, &mut self.eigvecs,v0);
+            assert_orthogonal(& self.eigvecs);
+            trace!("A degeneracy at time {} was handled. ", t)
+        }
+
+    }
+
+    pub fn adiabatic_lind(&mut self){
+//        let (vals, vecs) =
+//            self.haml.eig_p(t, Some(p ), false);
+//        self.eigvecs = vecs;
+//        self.eigvals = vals;
+        ame_liouvillian(self.bath, &mut self.work, &self.eigvals, &self.eigvecs,
                         &mut self.adiab_haml, &mut self.lind_pauli, &mut self.lind_coh,
                         &self.p_lindblad_ops );
     }
 
-    /// Evaluates the diabatic perturbation K_A(t) to second order with spacing dt
+    /// Evaluates the diabatic perturbation  -K_A(t)  to second order with spacing dt
     /// In the adiabatic frame,
-    ///  i W^{dag} (dW/dt)
+    ///  K_A = i W^{dag} (dW/dt)
     pub fn diabatic_driver(&mut self, t: f64, p: usize, dt: f64){
         let n = DenseQRep::qdim_op(&self.adiab_haml);
         let (vals1, vecs1) = self.haml.eig_p(t-dt, Some(p));
         let (vals2, vecs2) = self.haml.eig_p(t+dt, Some(p));
-        let mut w_dot = vecs2;
-        w_dot -= vecs1;
-        w_dot *= Complex::from(1.0/(2.0 * dt));
 
-        self.eigvecs.ad_mul_to(&w_dot, &mut self.diab_k);
-        self.diab_k *= Complex::i();
+        let mut w1 = self.eigvecs.ad_mul(&vecs1);
+        let mut w2 = self.eigvecs.ad_mul(&vecs2);
+        // Degeneracies have to be handled carefully for the diabatic perturbation
+        let degens = degeneracy_detect(&self.eigvals, None);
+
+        if degens.len() > 0{
+//            if degens.len() > 0{
+//                warn!("\
+//ame (diabatic_driver): A possible degeneracy was handled at time {}. \
+//This is normal for some diagonal Hamiltonian operators.", t)
+//            }
+            //let mut w1 = self.eigvecs.ad_mul(&vecs1);
+            handle_degeneracies(&degens, &mut w1);
+            //m1 = &self.eigvecs * w1;
+            //let mut w2 = self.eigvecs.ad_mul(&vecs2);
+            handle_degeneracies(&degens, &mut w2);
+            //m2 = &self.eigvecs * w2;
+        }
+//        else {
+//            m1 = vecs1;
+//            m2 = vecs2;
+//        }
+        // Handle the phases so that they are consistent with the current eigenvectors
+        //handle_phases(&mut w1);
+        //handle_phases(&mut w2);
+
+        //let m1 = &self.eigvecs * w1;
+        //let m2 = &self.eigvecs * w2;
+//        let m1 = w1;
+//        let m2 = w2;
+
+//        let mut w_dot = m2;
+//        w_dot -= m1;
+//        w_dot *= Complex::from(1.0/(2.0 * dt));
+
+//        let degens = degeneracy_detect(&self.eigvals, None);
+//        if degens.len() > 0{
+//            warn!(
+//"\
+//A possible degeneracy was handled at time {}. \
+//This is normal for some diagonal Hamiltonian operators.", t)
+//        }
+//        for di in degens.iter(){
+//            for &i in di.iter(){
+//
+//                let mut col = w_dot.column_mut(i);
+//                col *= Complex::from(0.0);
+//            }
+//        }
+
+        let mut w_dot = w2;
+        w_dot -= w1;
+        //w_dot *= Complex::from(1.0/(2.0 * dt));
+        w_dot.scalar_multiply_to(-Complex::<f64>::i() * Complex::from(1.0/(2.0 * dt)),
+                                 &mut self.diab_k);
+        //self.eigvecs.ad_mul_to(&w_dot, &mut self.diab_k);
+        //self.diab_k *= -Complex::i();
+
         self.diab_k.adjoint_to(&mut self.work.ztemp0);
         self.diab_k += &self.work.ztemp0;
         self.diab_k /= Complex::from(2.0);
 
     }
 
-    pub fn generate_split(&mut self, t_arr: &[f64], p: usize) -> Vec<AdiabaticMEL<f64>> {
+    /// This function currently has a lot of very specialized handling for keeping
+    /// track of the eigenvectors at the endpoints (t0, tf) of each integration steps
+    /// These endpoints must be used to accurately evaluate the diabatic perturbation K_A
+    ///
+    pub fn generate_split(&mut self, t_arr: &[f64], (t0, tf): (f64, f64), p: usize)
+        -> Vec<AdiabaticMEL<f64>>
+    {
+        if t_arr.len() != 2 {
+            panic!("ame: only two-point quadratures are supported")
+        }
 
-        let dt_vec : Vec<f64> = t_arr.iter().zip(t_arr.iter().skip(1))
-            .map(|(a, b)| *b - *a).collect_vec();
-        let dt_arr = Array1::from(dt_vec);
-        let dt_mean = (dt_arr).mean().unwrap();
+        let prev_t = self.prev_t;
+        let (mut v0, mut vf) =
+        match prev_t{
+            None =>{
+                self.load_eigv(t0, p, false);
+                let v0 = self.eigvecs.clone();
+                self.load_eigv(tf, p,false);
+                let mut vf = self.eigvecs.clone();
+                handle_relative_phases(&mut vf, &v0, &mut self.work.ztemp0);
+                (v0, vf)
+            }
+            Some((s0, sf)) =>{
+                if (s0 == t0) && (sf == tf) { // Unlikely but simple case of the exact same interval
+                    let v0 = self.prev_eigvecs.0.clone();
+                    let vf = self.prev_eigvecs.1.clone();
+                    (v0, vf)
+                } else if s0 == t0 { // Solver rejected tf and is attempting a smaller time step
+                    let v0 = self.prev_eigvecs.0.clone();
+                    self.load_eigv_degen_handle(tf, p, &v0);
+                    let mut vf = self.eigvecs.clone();
+                    handle_relative_phases(&mut vf, &v0, &mut self.work.ztemp0);
+                    (v0, vf)
+                } else if t0 == sf { // Solver accepted the previous step
+                    let v0 = self.prev_eigvecs.1.clone();
+                    self.load_eigv_degen_handle(tf, p, &v0);
+                    let mut vf = self.eigvecs.clone();
+                    handle_relative_phases(&mut vf, &v0, &mut self.work.ztemp0);
+                    (v0, vf)
+                } else if sf == tf {
+                    warn!("generate_split: An generally impossible branch was reached. (sf==tf)");
+                    let mut vf = self.prev_eigvecs.1.clone();
+                    self.load_eigv(t0, p, false);
+                    let v0 = self.eigvecs.clone();
+                    handle_relative_phases(&mut vf, &v0, &mut self.work.ztemp0);
+                    (v0, vf)
+                } else {
+                    self.load_eigv(t0, p, false);
+                    let v0 = self.eigvecs.clone();
+                    self.load_eigv_degen_handle(tf, p, &v0);
+                    let mut vf = self.eigvecs.clone();
+                    handle_relative_phases(&mut vf, &v0, &mut self.work.ztemp0);
+                    (v0, vf)
+                }
+            }
+        };
+//        for (mut v0i, mut vfi) in v0.column_iter_mut()
+//                .zip(vf.column_iter_mut()){
+//            v0i.normalize_mut();
+//            vfi.normalize_mut();
+//        }
 
-        let mut l_vec = Vec::new();
-        for &t in t_arr{
-            self.adiabatic_lind(t, p);
-            let mut coh_split_l = self.lind_coh.clone();
-            coh_split_l += &self.adiab_haml;
-            let dsl_lind = DirectSumL::new(self.lind_pauli.clone(), coh_split_l);
-            self.diabatic_driver(t, p, dt_mean);
-            let dsl = DirectSumL::new(self.diab_k.clone(), dsl_lind);
+//        let v00 = v0.column(0);
+//        let vf0 = vf.column(0);
+//        assert_relative_eq!(v00.norm(), 1.0);
+//        assert_relative_eq!(vf0.norm(), 1.0);
+
+        let delta_t = tf - t0;
+        let mut eigvecs : SmallVec<[Op<f64>; 4]> = SmallVec::new();
+        let mut dsl_vec = Vec::new();
+        let mut haml_vec = Vec::new();
+        let mut l_vec: Vec<AdiabaticMEL<f64>> = Vec::new();
+
+        // Load the eigenvector for the inner quadrature and evaluate
+        // the dissipative operators and the adiabatic hamiltonian
+        eigvecs.push(v0.clone());
+        for &t in t_arr.iter(){
+            self.load_eigv_degen_handle(t, p, &v0);
+            handle_relative_phases(&mut self.eigvecs, &v0, &mut self.work.ztemp0);
+
+            self.adiabatic_lind();
+            //self.lind_pauli.row_sum().map(|s| { assert_relative_eq!(s.abs(), 0.0)});
+
+            let dsl_lind = DirectSumL::new(self.lind_pauli.clone(), self.lind_coh.clone());
+            dsl_vec.push(dsl_lind);
+            haml_vec.push(self.adiab_haml.clone());
+            eigvecs.push(self.eigvecs.clone());
+        }
+        eigvecs.push(vf.clone());
+
+        let mut dvecs0 = v0.clone();
+        let mut dvecs1 = v0.clone();
+
+        // Evaluate the derivatives of the eigenvectors numerically at
+        // the assumed two-point Gauss-Legendre quadrature points
+        // and additionally using the endpoints t0, tf
+        four_point_gl(eigvecs.as_slice(), &mut dvecs0, &mut dvecs1);
+        dvecs0 /= Complex::from(delta_t);
+        dvecs1 /= Complex::from(delta_t);
+        // Finally, evaluate the diabatic perturbation -K_A = -i W^{dag} dW/dt
+        // at the quadrature points
+        let mut dvecs = [dvecs0, dvecs1];
+        for (i, (dv,(haml, dsl_lind))) in dvecs.iter()
+                .zip(haml_vec.into_iter().zip(dsl_vec.into_iter()))
+                .enumerate(){
+            eigvecs[i+1].ad_mul_to(dv, &mut self.work.ztemp0);
+            self.work.ztemp0 *= -Complex::i();
+            let mut ka = self.work.ztemp0.adjoint();
+            ka += &self.work.ztemp0;
+            ka *= -Complex::<f64>::i() / Complex::from(2.0);
+            let dsl_haml = DirectSumL::new(haml, ka);
+            let dsl = DirectSumL::new(dsl_haml, dsl_lind);
             l_vec.push(dsl);
         }
 
+//        let dt_vec : Vec<f64> = t_arr.iter().zip(t_arr.iter().skip(1))
+//            .map(|(a, b)| *b - *a).collect_vec();
+//        let dt_arr = Array1::from(dt_vec);
+//        let dt_mean = (dt_arr).mean().unwrap();
+
+
+//        for (i, &t) in t_arr.iter().enumerate(){
+//            self.load_eigv(t, p, false);
+//
+////            if i > 0 { // handle degeneracies and phases to be consistent with the first eigenbasis
+////                let degens = degeneracy_detect(&self.eigvals, None);
+////                let ref_eigvecs: &Op<f64> = &(l_vec[0].a.b);
+////                let mut w = ref_eigvecs.ad_mul(&self.eigvecs);
+////                if degens.len() > 0{
+////                    warn!("\
+////ame: A possible degeneracy was handled at time {}. \
+////This is normal for some diagonal Hamiltonian operators.", t);
+////                    handle_degeneracies(&degens, &mut w);
+////                }
+////                handle_phases(&mut w);
+////                self.eigvecs = ref_eigvecs * w;
+////            }
+//
+//            self.adiabatic_lind();
+//            let dsl_lind = DirectSumL::new(self.lind_pauli.clone(), self.lind_coh.clone());
+//            self.diabatic_driver(t, p, dt_mean/2.0);
+//            let mut k = self.diab_k.clone();
+//            k *= -Complex::i();
+//            let dsl_haml = DirectSumL::new(self.adiab_haml.clone(), k);
+//            let dsl = DirectSumL::new(dsl_haml, dsl_lind);
+//            l_vec.push(dsl);
+//        }
+
+        self.prev_eigvecs.0 = v0;
+        self.prev_eigvecs.1 = vf;
+        self.prev_t = Some((t0,tf));
         l_vec
     }
 
-
-
 }
 
-pub fn solve_ame<B: Bath<f64>>(ame: &mut AME<B>, initial_state: Op<f64>, tol: f64) -> Op<f64>{
+pub fn solve_ame<B: Bath<f64>>(
+    ame: &mut AME<B>,
+    initial_state: Op<f64>,
+    tol: f64,
+    dt_max_frac: f64
+)
+    -> Result<Op<f64>, ODEError>
+{
     let partitions  = ame.haml.partitions().to_owned();
+    let num_partitions = partitions.len() - 1;
     let n = ame.haml.basis_size() as usize;
     let mut norm_est = condest::Normest1::new(n, 2);
     let mut rho0 = initial_state;
+    let mut last_delta_t : Option<f64> = None;
 
     for (p, (&ti0, &tif)) in partitions.iter()
             .zip(partitions.iter().skip((1)))
             .enumerate()
     {
         let delta_t = tif - ti0;
-        let dt = delta_t/200.0;
+        let max_step = dt_max_frac * delta_t;
+        let min_step = max_step * 1.0e-10;
+        let dt = match last_delta_t{
+            None => dt_max_frac * delta_t / 20.0,
+            Some(dt) => dt.max(1.001*min_step).min(0.999*max_step) };
 
+        info!("Evolving partition {} / {} \t ({}, {})", p+1, num_partitions,
+                ti0, tif);
 
         ame.load_partition(p);
         let split = make_ame_split(n as u32);
 
-        let f = |t_arr: &[f64]|{
-                ame.generate_split(t_arr, p)
+        let f = |t_arr: &[f64], (t0, tf) : (f64, f64)| {
+                ame.generate_split(t_arr, (t0,tf),p)
             };
-        let norm_fn = |m: &Op<f64>|{
+        let norm_fn = |m: &Op<f64>| -> f64{
             //should technically be transposed to row major but denmats are hermitian
-            let arr = ArrayView2::from_shape((n, n), m.as_slice()).unwrap();
-                norm_est.normest1(&arr, 5)
-            };
+            //let absm = m.map(|c|c.abs());
+                //absm.row_sum().amax()/ ( (n as f64).sqrt())
+                //m.lp_norm(1)
+                let arr: ArrayView2<_> = ArrayView2::from_shape((n, n), m.as_slice()).unwrap();
+                norm_est.normest1(&arr, 5) / ( (n as f64).sqrt())
+
+        };
+
         let mut rhodag = rho0.clone();
         let mut solver = ExpCFMSolver::new(
             f, norm_fn,ti0, tif, rho0,  dt, split)
             .with_tolerance(1.0e-6, tol)
-            .with_step_range(dt*1.0e-4,
-                             dt*10.0)
-            .with_init_step(dt);
-        while let ODEState::Ok(step) = solver.step(){
+            .with_step_range(min_step,
+                             max_step)
+            .with_init_step(dt)
+            ;
+
+        let mut iters = 0;
+        let mut rejects = 0;
+        let mut ema_rej :f64 = 0.0;
+        loop{
+            let res = solver.step();
+
+            match res{
+                ODEState::Ok(step) => {
+                    iters += 1;
+                    match step{
+                        ODEStep::Step(dt) => {
+                            trace!("t={}\tStepped by {}", solver.ode_data().t, dt);
+                            ema_rej = ema_rej * 0.90;
+                        },
+                        ODEStep::Reject => {
+                            rejects += 1;
+                            ema_rej = ema_rej*0.90 + 0.10*1.0;
+                            if ema_rej > 0.9{
+                                panic!("Rejection rate too large.");
+                            } else if ema_rej > 0.75 {
+                                warn!("t={} *** High rejection rate ***\n\t (90% EMA: {})\t\tRejected step size: {}",
+                                      solver.ode_data().t, ema_rej, solver.ode_data().next_dt)
+                            }
+                            else if ema_rej > 0.5 {
+                                trace!("t={} *** Elevated rejection rate ***\n\t (90% EMA: {})\t\tRejected step size: {}",
+                                      solver.ode_data().t, ema_rej, solver.ode_data().next_dt)
+                            }
+//                            let rej_rate = rejects as f64 / iters as f64;
+//                            if iters > 10 && (rej_rate > 0.4) {
+//                                warn!("t={}\tHigh rejection rate ({}). Rejected step size: {}",
+//                                      solver.ode_data().t, rej_rate, solver.ode_data().next_dt)
+//                            }
+                        },
+                        _ => {}
+                    }
+                },
+                ODEState::Done => {
+                    trace!("Partition Done");
+                    break;
+                },
+                ODEState::Err(E) => {
+                    error!("ODE solver error occurred.");
+                    return Err(E);
+                }
+            }
             //Enforce Hermiticity after each step
             let mut dat = solver.ode_data_mut();
             dat.x.adjoint_to(&mut rhodag);
             dat.x += &rhodag;
             dat.x /= c64::from(2.0);
         }
+//
+//        while let ODEState::Ok(step) = solver.step()
+//
+//            {
+//            //Enforce Hermiticity after each step
+//            let mut dat = solver.ode_data_mut();
+//            dat.x.adjoint_to(&mut rhodag);
+//            dat.x += &rhodag;
+//            dat.x /= c64::from(2.0);
+//        }
 
+        last_delta_t = Some(solver.ode_data().h);
         let(_, rhof) = solver.into_current();
-        rho0 = rhof;
+
+        //if p + 1 < num_partitions {
+        //    rho0 = ame.haml.advance_partition(&rhof, p);
+        //} else {
+            rho0 = rhof;
+        //}
     }
 
-    rho0
+    Ok(rho0)
 }
 
 #[cfg(test)]
@@ -387,6 +749,8 @@ mod tests{
     use num_complex::Complex64 as c64;
     use num_traits::real::Real;
     use vec_ode::LinearCombination;
+
+    extern crate simple_logger;
 
     #[test]
     fn single_qubit_time_ind_ame(){
@@ -419,27 +783,34 @@ mod tests{
         let haml_part = TimePartHaml::new(haml, 2, 0.0, tf,1);
 
         let mut ame = AME::new(&haml_part, &lind_ops, &bath);
-
-        let mut split = make_ame_split(2);
-        let mut spl1 = ame.generate_split(&[0.50*tf, 0.51*tf], 0);
-        spl1[0].scale(c64::from(0.1));
-
-        let spu1 = split.exp(&spl1[0]);
-
         let rho0 = (id.clone() + &sy)/c64::from(2.0);
-        let rho1 = split.map_exp(&spu1, &rho0);
 
-        println!("Initial adiabatic density matrix:\n{}", rho0);
-        println!("Action at tf/2:\n{}", rho1);
+//        let mut split = make_ame_split(2);
+//        let mut spl1 = ame.generate_split(&[0.50*tf, 0.51*tf], (),0);
+//        spl1[0].scale(c64::from(0.1));
+//
+//        let spu1 = split.exp(&spl1[0]);
+//
+//        let rho0 = (id.clone() + &sy)/c64::from(2.0);
+//        let rho1 = split.map_exp(&spu1, &rho0);
+//
+//        println!("Initial adiabatic density matrix:\n{}", rho0);
+//        println!("Action at tf/2:\n{}", rho1);
 
-        let rhof = solve_ame(&mut ame, rho0, 1.0e-6);
+        let rhof = solve_ame(
+            &mut ame, rho0, 1.0e-6, 0.1);
 
-        println!("Final density matrix:\n{}", rhof);
+        match rhof{
+            Ok(rho) => println!("Final density matrix:\n{}", rho),
+            Err(e) => println!("An ODE Solver error occurred")
+        }
     }
 
     #[test]
     fn single_qubit_ame(){
-        let eta = 1.0e-4;
+        simple_logger::init_with_level(log::Level::Trace).unwrap();
+
+        let eta = 0.0;
         let omega_c = 2.0 * f64::pi() * 4.0 ;
         let temp_mk = 12.1;
 
@@ -449,7 +820,7 @@ mod tests{
             .with_lamb_shift(-12.0*omega_c, 12.0*omega_c)
             ;
 
-        let tf = 2000.0;
+        let tf = 10.0 / f64::sqrt(2.0);
         let dt = 0.01;
         let mut sp_haml = DenMatExpiSplit::<f64>::new(2);
         let id = pauli::id::<f64>();
@@ -457,21 +828,21 @@ mod tests{
         let sy = pauli::sy::<f64>();
         let sz = pauli::sz::<f64>();
 
-        let fx = |t: f64| Complex::from(1.0*(t/tf).cos());
-        let fy = |t: f64| Complex::from(1.0*(t/tf).sin());
+        let fz = |t: f64| Complex::from(-2.0 * f64::pi() *(4.0 * f64::pi() * t).cos());
+        let fx = |t: f64| Complex::from(-2.0 * f64::pi() *(4.0 * f64::pi() * t).sin());
 
+        let hz = TimeDepMatrixTerm::new(&sz, &fz);
         let hx = TimeDepMatrixTerm::new(&sx, &fx);
-        let hy = TimeDepMatrixTerm::new(&sy, &fy);
         let lz = sz.clone();
         let lind_ops = vec![lz];
 
 
-        let haml = TimeDepMatrix::new(vec![hx, hy]);
-        let haml_part = TimePartHaml::new(haml, 2, 0.0, tf,1);
+        let haml = TimeDepMatrix::new(vec![hz, hx]);
+        let haml_part = TimePartHaml::new(haml, 2, 0.0, tf,20);
 
         let mut ame = AME::new(&haml_part, &lind_ops, &bath);
 
-        let rho0 = (id.clone() + sz)/c64::from(2.0);
+        let rho0 = (id.clone() + sz.clone())/c64::from(2.0);
         println!("Initial adiabatic density matrix:\n{}", rho0);
 
 //        let mut split = make_ame_split(2);
@@ -484,8 +855,22 @@ mod tests{
 //
 //        println!("Action at tf/2:\n{}", rho1);
 
-        let rhof = solve_ame(&mut ame, rho0, 1.0e-6);
+        let rhof = solve_ame(&mut ame, rho0, 1.0e-10, 0.1);
+        match rhof{
+            Ok(rho) => {
+                let mut tr = 0.0; let mut pops = Vec::new();
+                let n = rho.shape().0;
+                for i in 0..n{
+                    let &p = rho.get((n+1)*i).unwrap();
+                    let p = p.re;
+                    tr += p;
+                    pops.push(p);
+                }
+                println!("Final trace: {}\n\n", tr);
 
-        println!("Final density matrix:\n{}", rhof);
+                println!("Final density matrix:\n{}", rho)
+            },
+            Err(e) => println!("An ODE Solver error occurred")
+        }
     }
 }

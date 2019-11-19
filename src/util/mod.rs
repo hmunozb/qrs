@@ -3,6 +3,8 @@ mod matrix;
 mod interp_fn;
 mod partitioned_haml;
 mod time_dep_op;
+pub mod degen;
+pub mod diff;
 //mod complex;
 
 pub use eig_resolver::*;

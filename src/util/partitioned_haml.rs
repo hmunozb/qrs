@@ -5,12 +5,15 @@ use blas_traits::BlasScalar;
 use num_traits::{One, Zero};
 use num_complex::Complex;
 use nalgebra::{DMatrix, DVector};
+use smallvec::SmallVec;
 use itertools_num::linspace;
-use log::{info, warn};
+use log::{info, warn, trace};
 use crate::base::dense::*;
 use crate::util::time_dep_op::TimeDepMatrix;
 use num_traits::Float;
 use crate::util::{EigJob, EigRangeData, EigResolver, change_basis};
+use crate::util::degen::{handle_degeneracies_vals, handle_phases, degeneracy_detect, handle_degeneracies};
+
 
 pub struct TimePartitionOptions {
     pub nudge_final_partition: bool
@@ -51,7 +54,7 @@ impl<'a, R: RealField + Float> TimePartHaml<'a, R>
         }
 
         let t0 = time_partitions.first().unwrap().clone();
-        let tf = time_partitions.first().unwrap().clone();
+        let tf = time_partitions.last().unwrap().clone();
 
         let time_range = (t0.clone(), tf.clone());
         let mut partition_midpoints: Vec<R> =
@@ -96,10 +99,19 @@ impl<'a, R: RealField + Float> TimePartHaml<'a, R>
             let ht = eiger.borrow_matrix();
             self.haml.eval_to(ht, *t);
             eiger.eig();
+            let mut vecs = eiger.vecs().clone();
+//            let vals = eiger.vals().as_slice().get(0..self.basis_size as usize).unwrap();
+//            let vals = DVector::from_column_slice(vals);
+//            let degens = degeneracy_detect(&vals, None);
+//            if degens.len() > 0{
+//                info!("A degeneracy in the basis at time {} was handled.", t);
+//                handle_degeneracies(&degens, &mut vecs);
+//            }
 
-            self.basis_sequence.push(eiger.vecs().clone());
             let h_local = self.haml.map(
-                |m| change_basis(m, eiger.vecs()));
+                |m| change_basis(m, &vecs));
+
+            self.basis_sequence.push(vecs);
             self.haml_sequence.push(h_local);
         }
 
@@ -116,11 +128,14 @@ impl<'a, R: RealField + Float> TimePartHaml<'a, R>
     pub fn auto_refine(self, strength: usize, tol: f64, max_rounds: u32) -> Self{
         let mut me = self;
         let mut previous_parts = me.time_partitions.len();
+
         for _ in 0..max_rounds{
             me = me.refine_partition(strength, tol);
-            if me.time_partitions.len() == previous_parts{
+            let current_parts = me.time_partitions.len();
+            if current_parts == previous_parts{
                 return me;
             }
+            previous_parts = current_parts;
         }
         warn!("Partition Refinement failed to converge after {} rounds. Stopping.", max_rounds);
         return me;
@@ -135,7 +150,7 @@ impl<'a, R: RealField + Float> TimePartHaml<'a, R>
         let num_partitions = self.partition_midpoints.len();
         let n = self.haml.shape().0;
         let id_diagonal: DVector<Complex<R>> = DVector::from_fn(
-            n, |i, _| if i < strength { Complex::one() } else { Complex::zero() });
+            self.basis_size as usize, |i, _| if i < strength { Complex::one() } else { Complex::zero() });
         let id0: DMatrix<Complex<R>> = DMatrix::from_diagonal(&id_diagonal);
         let mut eiger: EigResolver<Complex<R>> = EigResolver::new_eiger(
             n as u32, EigJob::ValsVecs,
@@ -160,11 +175,13 @@ impl<'a, R: RealField + Float> TimePartHaml<'a, R>
             let vecs_end = get_eigs(t1);
             let projector = (vecs_init.ad_mul(&vecs_mid)) * (vecs_mid.ad_mul(&vecs_end));
             let id1 = change_basis(&id0, &projector);
+
             let trace_loss = 1.0 - (id1.trace() as Complex<R>).re.to_subset().unwrap()/(strength as f64);
             new_time_intervals.push(t0.clone());
+            trace!("Partition {}/{} trace loss: {}",i+1, num_partitions, trace_loss);
             if trace_loss > tol {
                 let order = (1.0 + (trace_loss.abs() / tol).log2()).round() as usize;
-                info!("Partition {}/{} will be refined: Tr Loss={}, r={}",
+                info!("***Partition {}/{} will be refined: Tr Loss={}, r={}",
                       i, num_partitions, trace_loss, order);
                 //linspace is endpoint inclusive
                 //we only need to append the intermediate refinement points
@@ -210,7 +227,16 @@ impl<'a, R: RealField + Float> TimePartHaml<'a, R>
         let mut eiger = self.p_eiger();
         self.haml_sequence[part].eval_to(eiger.borrow_matrix(), t);
 
-        eiger.into_eigs()
+        let (vals, mut vecs) = eiger.into_eigs();
+
+//        if handle_degens{
+//            handle_degeneracies_vals(&vals, &mut vecs, None);
+//        }
+//        if phases_gauge{
+//            handle_phases(&mut vecs);
+//        }
+
+        (vals, vecs)
     }
 
     pub fn transform_to_partition(&self, op: &Op<R>, p: usize) -> Op<R>{
@@ -221,6 +247,10 @@ impl<'a, R: RealField + Float> TimePartHaml<'a, R>
     pub fn advance_partition(&self, op: &Op<R>, p0: usize ) -> Op<R>{
         let projs = &self.projector_sequence[p0];
         change_basis(op, projs)
+    }
+
+    pub fn projector(&self, p0: usize) -> &Op<R>{
+        &self.projector_sequence[p0]
     }
 }
 

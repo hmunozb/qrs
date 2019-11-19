@@ -80,8 +80,8 @@ impl<N:RealField> Bath<N> for OhmicBath<N>{
     /// As w -> 0
     /// g = 2 pi eta /beta
     fn gamma(&self, omega:N) -> N {
-        if ComplexField::abs(self.beta * omega) < N::from_subset(&1.0e-4){
-            N::two_pi() * self.eta * self.beta
+        if ComplexField::abs(self.beta * omega) < N::from_subset(&1.0e-8){
+            N::two_pi() * self.eta / self.beta
         } else {
             N::two_pi() * self.eta * omega * N::exp(- omega.abs()/self.omega_c)
                 /(N::one() - N::exp(-self.beta*omega))
