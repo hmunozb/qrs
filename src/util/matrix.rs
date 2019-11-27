@@ -4,6 +4,8 @@ use nalgebra::base::storage::{ContiguousStorage, ContiguousStorageMut, Storage, 
 use itertools::Itertools;
 use alga::general::{ComplexField, RealField};
 use num_complex::Complex;
+use cblas::{Transpose, Layout};
+use blas_traits::BlasScalar;
 
 /// Computes
 /// out[i, j] = f( a[i], b[j] )
@@ -41,28 +43,69 @@ where N:Scalar+RealField, R: Dim, C: Dim, S1: Storage<N, R, C>, S2: StorageMut<C
     }
 }
 
+pub fn gemm<N: Scalar + BlasScalar>(
+        c: &mut DMatrix<N>, a: &DMatrix<N>, b: &DMatrix<N>, a_t: Transpose, b_t: Transpose ){
+    let a_sh = a.shape();
+    let b_sh = b.shape();
+    let c_sh = c.shape();
+    let at_sh = if let Transpose::None = a_t {a_sh} else { (a_sh.1, a_sh.0)};
+    let bt_sh = if let Transpose::None = b_t {b_sh} else { (b_sh.1, b_sh.0)};
+    assert!(at_sh.1 == bt_sh.0, format!("Shape mismatch: A = {:?}, B = {:?}", at_sh, bt_sh));
+    assert!(at_sh.0 == c_sh.0, format!("Shape mismatch: A = {:?}, C = {:?}", at_sh, c_sh));
+    assert!(bt_sh.1 == c_sh.1, format!("Shape mismatch: B = {:?}, C = {:?}", bt_sh, c_sh));
+
+    N::gemm(Layout::ColumnMajor, a_t, b_t,
+            at_sh.0 as i32, bt_sh.1 as i32,
+    at_sh.1 as i32, N::one(), a.as_slice(),  a_sh.0 as i32,  b.as_slice(),
+            b_sh.0 as i32, N::zero(), c.as_mut_slice(), c_sh.0 as i32);
+}
+
+pub fn ad_mul_to<N: Scalar + BlasScalar>(
+    a: &DMatrix<N>, b: &DMatrix<N>, c: &mut DMatrix<N>
+){
+    gemm(c, a, b, Transpose::Conjugate, Transpose::None);
+}
+
 /// Z <- U^dag A U
-pub fn change_basis_to<N: Scalar+ComplexField>(
+pub fn change_basis_to<N: Scalar+BlasScalar>(
         A: &DMatrix<N>,
         U: &DMatrix<N>,
         temp: &mut DMatrix<N>,
         out: &mut DMatrix<N>){
-    A.mul_to(U, temp);
-    U.ad_mul_to(temp, out);
+    let a_sh = A.shape();
+    let u_sh = U.shape();
+    let mut m1 : DMatrix<N> = DMatrix::zeros(a_sh.0, u_sh.1);
+    gemm(&mut m1, A, U, Transpose::None, Transpose::None);
+    gemm(out, U, &m1, Transpose::Conjugate, Transpose::None);
 }
 
 /// Performs U^dag A U
-pub fn change_basis<N: Scalar+ComplexField>(
+pub fn change_basis<N: Scalar+BlasScalar>(
     A: &DMatrix<N>,
     U: &DMatrix<N>) -> DMatrix<N>{
-    U.ad_mul(&(A * U))
+    let a_sh = A.shape();
+    let u_sh = U.shape();
+    let mut m1 : DMatrix<N> = DMatrix::zeros(a_sh.0, u_sh.1);
+    let mut m2 : DMatrix<N> = DMatrix::zeros(u_sh.1, u_sh.1);
+    gemm(&mut m1, A, U, Transpose::None, Transpose::None);
+    gemm(&mut m2, U, &m1, Transpose::Conjugate, Transpose::None);
+    m2
+    //note: threshold size for zgemm to be efficient over matrixmultiply may be above 16x16
+    //U.ad_mul(&(A * U))
 }
 
 /// Performs U A U^dag where A is Hermitian
-pub fn unchange_basis<N: Scalar+ComplexField>(
+pub fn unchange_basis<N: Scalar+BlasScalar>(
     A: &DMatrix<N>,
     U: &DMatrix<N>) -> DMatrix<N>{
-    U * ( A * U.adjoint())
+    let a_sh = A.shape();
+    let u_sh = U.shape();
+    let mut m1 : DMatrix<N> = DMatrix::zeros(a_sh.0, u_sh.0);
+    let mut m2 : DMatrix<N> = DMatrix::zeros(u_sh.0, u_sh.0);
+    gemm(&mut m1, A, U, Transpose::None, Transpose::Conjugate);
+    gemm(&mut m2, U, &m1, Transpose::None, Transpose::None);
+    m2
+    // U * ( A * U.adjoint())
 }
 
 /// Adds the sum of the matrices in arr to out

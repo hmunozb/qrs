@@ -42,8 +42,8 @@ where Complex<T> : BlasScalar + ComplexField<RealField=T>
         Op::zeros(self.n, self.n)
     }
 
-    fn exp(&mut self, l: &Op<T>) -> (Ket<T>, Op<T>){
-        self.eiger.borrow_matrix().copy_from(l);
+    fn exp(&mut self, l: Op<T>) -> (Ket<T>, Op<T>){
+        self.eiger.borrow_matrix().copy_from(&l);
         self.eiger.eig();
 
         let (vals, vecs ) = (self.eiger.vals().clone(),
@@ -60,8 +60,8 @@ where Complex<T> : BlasScalar + ComplexField<RealField=T>
         &u.1 * &u.0.component_mul(&u.1.ad_mul(x))
     }
 
-    fn multi_exp(&mut self, l: &Op<T>, k_arr: &[Complex<T>]) -> Vec<Self::U>{
-        self.eiger.borrow_matrix().copy_from(l);
+    fn multi_exp(&mut self, l: Op<T>, k_arr: &[Complex<T>]) -> Vec<Self::U>{
+        self.eiger.borrow_matrix().copy_from(&l);
         self.eiger.eig();
 
         let (vals, vecs ) = (self.eiger.vals().clone(),
@@ -222,7 +222,7 @@ mod tests{
         let haml_a = TimeDepMatrix{terms: vec![hx.clone()]};
         let haml_b = TimeDepMatrix{terms: vec![hz.clone()]};
         let haml_sum = TimeDepMatrix{terms: vec![hx, hz]};
-        let exp_haml = sp_haml.exp(&haml_sum.eval(tf));
+        let exp_haml = sp_haml.exp(haml_sum.eval(tf));
         let psi0 = pauli::sx_eig(-1);
 
         println!("Testing SE Split...");

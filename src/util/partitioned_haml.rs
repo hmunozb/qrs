@@ -4,7 +4,7 @@ use alga::general::{ComplexField, RealField};
 use blas_traits::BlasScalar;
 use num_traits::{One, Zero};
 use num_complex::Complex;
-use nalgebra::{DMatrix, DVector};
+use nalgebra::{DMatrix, DVector, U1, Dynamic};
 use smallvec::SmallVec;
 use itertools_num::linspace;
 use log::{info, warn, trace};
@@ -237,6 +237,27 @@ impl<'a, R: RealField + Float> TimePartHaml<'a, R>
 //        }
 
         (vals, vecs)
+    }
+
+    pub fn canonical_basis_amplitudes(&self, i: usize, p: usize)
+            -> nalgebra::MatrixSliceMN<Complex<R>, U1, Dynamic, U1, Dynamic> {
+        let row = self.basis_sequence[p].row(i);
+        row
+    }
+
+    pub fn sparse_canonical_basis_projs(&self, cb: &[usize]) -> Vec<Op<R>>{
+        let n = cb.len();
+        let k = self.basis_size as usize;
+        let mut cb_vec = Vec::new();
+        for e_basis in self.basis_sequence.iter(){
+            let mut cb_proj :Op<R> = Op::<R>::zeros(n, k);
+            for i in 0..n{
+                let mut row = cb_proj.row_mut(i);
+                row.copy_from(&e_basis.row(cb[i]));
+            }
+            cb_vec.push(cb_proj);
+        }
+        cb_vec
     }
 
     pub fn transform_to_partition(&self, op: &Op<R>, p: usize) -> Op<R>{

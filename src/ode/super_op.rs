@@ -1,18 +1,20 @@
-use alga::general::{RealField, ComplexField};
+use alga::general::{RealField, ComplexField, SupersetOf};
 use expm::Expm;
-use ndarray::Array2;
+use ndarray::{Array2, NdIndex};
 use ndarray::{ArrayView, ArrayView2};
 use ndarray::ShapeBuilder;
 use num_complex::Complex;
 use num_traits::Float;
 use vec_ode::exp::{ExponentialSplit, Commutator};
-
+use log::warn;
 use crate::base::dense::*;
 use blas_traits::BlasScalar;
 use crate::util::{EigResolver, EigJob, EigRangeData, outer_zip_to, change_basis_to, change_basis, unchange_basis};
 use std::iter::FromIterator;
 use nalgebra::{DMatrix, Dynamic, Matrix};
 use itertools::Itertools;
+use vec_ode::LinearCombination;
+use std::marker::PhantomData;
 
 ///Defines the exponential e^{-i H} for a Hermitian operator H
 /// For Split ODE solvers
@@ -42,8 +44,8 @@ impl<T: RealField+Float> ExponentialSplit<T, Complex<T>, Op<T>> for DenMatExpiSp
         Op::zeros(self.n, self.n)
     }
 
-    fn exp(&mut self, l: &Op<T>) -> (Op<T>, Op<T>){
-        self.eiger.borrow_matrix().copy_from(l);
+    fn exp(&mut self, l: Op<T>) -> (Op<T>, Op<T>){
+        self.eiger.borrow_matrix().copy_from(&l);
         self.eiger.eig();
 
         let (vals, vecs ) = (self.eiger.vals().clone(),
@@ -66,8 +68,8 @@ impl<T: RealField+Float> ExponentialSplit<T, Complex<T>, Op<T>> for DenMatExpiSp
         unchange_basis( &y , &u.1)
     }
 
-    fn multi_exp(&mut self, l: &Op<T>, k_arr: &[Complex<T>]) -> Vec<Self::U>{
-        self.eiger.borrow_matrix().copy_from(l);
+    fn multi_exp(&mut self, l: Op<T>, k_arr: &[Complex<T>]) -> Vec<Self::U>{
+        self.eiger.borrow_matrix().copy_from(&l);
         self.eiger.eig();
 
         let (vals, vecs ) = (self.eiger.vals().clone(),
@@ -111,7 +113,7 @@ where Complex<T> : BlasScalar
         Op::zeros(self.n, self.n)
     }
 
-    fn exp(&mut self, l: &Self::L) -> Self::U {
+    fn exp(&mut self, l: Self::L) -> Self::U {
         let n = self.n;
         let arr = ArrayView2::from_shape((n,n), & l.as_slice()).unwrap();
         let mut exp_arr = Array2::zeros((n,n));
@@ -165,8 +167,10 @@ impl<T: RealField+Float> ExponentialSplit<T, Complex<T>, Op<T>> for CoherentExpS
         Op::zeros(self.n, self.n)
     }
 
-    fn exp(&mut self, l: &Op<T>) -> Op<T>{
-        l.map( |x| x.exp() )
+    fn exp(&mut self, l: Op<T>) -> Op<T>{
+        let mut e = l;
+        e.apply( |x| x.exp() );
+        e
     }
 
     fn map_exp(&mut self, u: & Op<T>, x: &Op<T>) -> Op<T>{
@@ -208,7 +212,7 @@ where Complex<T>: BlasScalar
         Op::zeros(self.n, self.n)
     }
 
-    fn exp(&mut self, l: &Op<T>) -> Op<T>{
+    fn exp(&mut self, l: Op<T>) -> Op<T>{
         let n = self.n;
         //let re_l = l.map(|x| x.re.to_f64().unwrap() );
         // Construct a array from a *column major* slice
@@ -246,6 +250,81 @@ where Complex<T>: BlasScalar
     }
 }
 
+pub struct MaybeScalePowExp<T, Sp>
+where   T: RealField,
+        Sp: ExponentialSplit<T, Complex<T>, Op<T>, L=Op<T>>
+{
+    sp: Sp,
+    lim: T
+}
+
+impl<T, Sp> MaybeScalePowExp<T, Sp>
+where   T: RealField,
+        Sp: ExponentialSplit<T, Complex<T>, Op<T>, L=Op<T>>
+{
+    pub fn new(sp: Sp, lim: T) -> Self{
+        Self{sp, lim}
+    }
+
+    fn pow_order(&self, x: &Op<T>) -> i64 {
+        let (n, m) = x.shape();
+        let mut k = T::zero();
+        //assert!(n==m);
+        for i in 0..n{
+            k = k.max(x.get((n+1)*i).unwrap().abs());
+        }
+
+        let d = k / self.lim;
+        if d <= T::one(){
+            (d+T::one()).to_subset().unwrap() as i64
+        } else {
+            if d > T::from_subset(&10.0){
+                warn!("MaybeScalePowExp: Excessive Iterations ({} / {})", d, self.lim)};
+            (d + T::one()).to_subset().unwrap() as i64
+        }
+    }
+}
+
+impl<T, Sp> ExponentialSplit<T, Complex<T>, Op<T>>
+for MaybeScalePowExp<T, Sp>
+where   T: RealField,
+        Sp: ExponentialSplit<T, Complex<T>, Op<T>,L=Op<T>>
+{
+    type L = Op<T>;
+    type U = (Sp::U, i64);
+
+    fn lin_zero(&self) -> Self::L {
+        self.sp.lin_zero()
+    }
+
+    fn exp(&mut self, l: Op<T>) -> Self::U {
+        let d = self.pow_order(&l);
+        assert!(d > 0);
+        if d == 1{
+            (self.sp.exp(l), 1)
+        } else {
+            let mut l = l;
+            LinearCombination::scale(&mut l,
+             Complex::from(T::from_i64(d).unwrap()).recip());
+            let u = self.sp.exp(l);
+            (u, d)
+        }
+
+    }
+
+    fn map_exp(&mut self, u: &Self::U, x: &Op<T>) -> Op<T> {
+        let (u, d) = u;
+        let mut x0 : Op<T> = x.clone();
+        //let mut x1 : &Op<T>;
+        for i in 0..*d{
+            let x1 = self.sp.map_exp(u, &x0);
+            x0 = x1;
+        }
+        x0
+    }
+
+}
+
 #[cfg(test)]
 mod tests{
     use super::*;
@@ -265,7 +344,7 @@ mod tests{
                                               &[_1, _0, _0,
                                                   _0, c64::from(0.5), _0,
                                                   _0, _0, c64::from(1.0) ]);
-        let u1 = ksplit.exp(&m1);
+        let u1 = ksplit.exp(m1.clone());
         let y1 = ksplit.map_exp(&u1, &x1);
 
         println!(" Rates:\n{}\n\n Exponential:\n{}\n", m1, u1);

@@ -4,6 +4,7 @@ use crate::base::dense::*;
 use crate::oqs::bath::Bath;
 use crate::ode::dense::DenseExpiSplit;
 use crate::ode::super_op::{KineticExpSplit, CoherentExpSplit, DenMatExpiSplit, DenMatPerturbExpSplit};
+use crate::ode::super_op::{MaybeScalePowExp};
 use alga::general::{ComplexField, RealField};
 use crate::approx::AbsDiffEq;
 use blas_traits::BlasScalar;
@@ -27,12 +28,15 @@ use crate::util::degen::{handle_degeneracies, degeneracy_detect, handle_degenera
 use crate::util::diff::four_point_gl;
 //use alga::linear::NormedSpace;
 
+static AME_DIS_KINETIC_SCALE_LIM : f64 = 5.0e-1;
+static AME_HAML_COHERENT_SCALE_LIM : f64 = 1.0e9;
+
 type AMEDissipatorSplit<T> = CommutativeExpSplit<T, Complex<T>, Op<T>,
-                                KineticExpSplit<T>,
+                                MaybeScalePowExp<T, KineticExpSplit<T>>,
                                 CoherentExpSplit>;
 type AMEHamiltonianSplit<T> = RKNR4ExpSplit<T, Complex<T>, Op<T>,
                                 CoherentExpSplit,
-                                DenMatPerturbExpSplit<T>>;
+                                DenMatExpiSplit<T>>;
 type AdiabaticMEExpSplit<T> = SemiComplexO4ExpSplit<T, Complex<T>, Op<T>,
                                 AMEHamiltonianSplit<T>,
                                 AMEDissipatorSplit<T>>;
@@ -45,11 +49,12 @@ where Complex<T> : BlasScalar + ComplexField<RealField=T>
     let split = AdiabaticMEExpSplit::<T>::new(
         AMEHamiltonianSplit::new(
             CoherentExpSplit::new(n),
-                    DenMatPerturbExpSplit::new(n),
+                    DenMatExpiSplit::new(n),
             //DenMatExpiSplit::new(n)
              ),
         AMEDissipatorSplit::new(
-             KineticExpSplit::new(n),
+             MaybeScalePowExp::new(KineticExpSplit::new(n),
+                                   T::from_subset(&AME_DIS_KINETIC_SCALE_LIM)),
              CoherentExpSplit::new(n),)
     );
 
@@ -254,10 +259,24 @@ where T: RealField
 }
 
 pub struct AMEResults{
-    t: Array1<f64>,
-    rho: Array1<Op<f64>>,
-    partitions: Vec<u32>,
-    observables: Vec<Vec<c64>>
+    pub t: Vec<f64>,
+    pub rho: Vec<Op<f64>>,
+    pub partitions: Vec<u32>,
+    pub eigvecs: Vec<Op<f64>>,
+    pub observables: Vec<Vec<c64>>
+}
+
+impl AMEResults{
+    pub fn change_rho_basis(&self, new_bases: Vec<Op<f64>>) -> Vec<Op<f64>>{
+        let mut new_rhos = Vec::new();
+        for ((rho, &p), basis) in self.rho.iter().zip(self.partitions.iter())
+                                    .zip(self.eigvecs.iter()){
+            let w = &new_bases[p as usize] * basis;
+            let new_rho = unchange_basis(rho, &w);
+            new_rhos.push(new_rho);
+        }
+        new_rhos
+    }
 }
 
 pub struct AME<'a, B: Bath<f64>>{
@@ -365,6 +384,9 @@ impl<'a, B: Bath<f64>> AME<'a, B> {
             trace!("A degeneracy at time {} was handled. ", t)
         }
 
+    }
+    pub fn last_eigvecs(&self) ->  &Op<f64>{
+        &self.prev_eigvecs.1
     }
 
     pub fn adiabatic_lind(&mut self){
@@ -554,11 +576,12 @@ impl<'a, B: Bath<f64>> AME<'a, B> {
         for (i, (dv,(haml, dsl_lind))) in dvecs.iter()
                 .zip(haml_vec.into_iter().zip(dsl_vec.into_iter()))
                 .enumerate(){
-            eigvecs[i+1].ad_mul_to(dv, &mut self.work.ztemp0);
+            ad_mul_to(&eigvecs[i+1], &dv, &mut self.work.ztemp0);
+            //eigvecs[i+1].ad_mul_to(dv, &mut self.work.ztemp0);
             self.work.ztemp0 *= -Complex::i();
             let mut ka = self.work.ztemp0.adjoint();
             ka += &self.work.ztemp0;
-            ka *= -Complex::<f64>::i() / Complex::from(2.0);
+            ka *= Complex::from(1.0/2.0);
             let dsl_haml = DirectSumL::new(haml, ka);
             let dsl = DirectSumL::new(dsl_haml, dsl_lind);
             l_vec.push(dsl);
@@ -611,7 +634,7 @@ pub fn solve_ame<B: Bath<f64>>(
     tol: f64,
     dt_max_frac: f64
 )
-    -> Result<Op<f64>, ODEError>
+    -> Result<AMEResults, ODEError>
 {
     let partitions  = ame.haml.partitions().to_owned();
     let num_partitions = partitions.len() - 1;
@@ -619,6 +642,14 @@ pub fn solve_ame<B: Bath<f64>>(
     let mut norm_est = condest::Normest1::new(n, 2);
     let mut rho0 = initial_state;
     let mut last_delta_t : Option<f64> = None;
+    let mut last_eigs : Op<f64> = Op::<f64>::zeros(n,n);
+    let mut rho_vec: Vec<Op<f64>> = Vec::new();
+    let mut eigvecs: Vec<Op<f64>> = Vec::new();
+    let mut results_parts = Vec::new();
+
+
+    rho_vec.push(rho0.clone());
+    eigvecs.push(ame.haml.eig_p(partitions[0], Some(0)).1);
 
     for (p, (&ti0, &tif)) in partitions.iter()
             .zip(partitions.iter().skip((1)))
@@ -723,15 +754,20 @@ pub fn solve_ame<B: Bath<f64>>(
 
         last_delta_t = Some(solver.ode_data().h);
         let(_, rhof) = solver.into_current();
-
+        rho_vec.push(rhof.clone());
+        eigvecs.push(ame.last_eigvecs().clone());
+        results_parts.push(p as u32);
         //if p + 1 < num_partitions {
         //    rho0 = ame.haml.advance_partition(&rhof, p);
         //} else {
-            rho0 = rhof;
+        rho0 = rhof;
         //}
     }
 
-    Ok(rho0)
+    let results = AMEResults{t: partitions, rho: rho_vec,
+        partitions: results_parts, eigvecs, observables: Vec::new() };
+
+    Ok(results)
 }
 
 #[cfg(test)]
@@ -801,14 +837,14 @@ mod tests{
             &mut ame, rho0, 1.0e-6, 0.1);
 
         match rhof{
-            Ok(rho) => println!("Final density matrix:\n{}", rho),
+            Ok(res) => println!("Final density matrix:\n{}", res.rho.last().unwrap()),
             Err(e) => println!("An ODE Solver error occurred")
         }
     }
 
     #[test]
     fn single_qubit_ame(){
-        simple_logger::init_with_level(log::Level::Trace).unwrap();
+        simple_logger::init_with_level(log::Level::Info).unwrap();
 
         let eta = 0.0;
         let omega_c = 2.0 * f64::pi() * 4.0 ;
@@ -857,7 +893,8 @@ mod tests{
 
         let rhof = solve_ame(&mut ame, rho0, 1.0e-10, 0.1);
         match rhof{
-            Ok(rho) => {
+            Ok(res) => {
+                let rho = res.rho.last().unwrap();
                 let mut tr = 0.0; let mut pops = Vec::new();
                 let n = rho.shape().0;
                 for i in 0..n{
