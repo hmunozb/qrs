@@ -1,18 +1,19 @@
 use std::iter::FromIterator;
 
 use alga::general::{ComplexField, RealField};
-use blas_traits::BlasScalar;
+use blas_traits::{BlasScalar, Tsyheevx};
 use num_traits::{One, Zero};
 use num_complex::Complex;
 use nalgebra::{DMatrix, DVector, U1, Dynamic};
 use smallvec::SmallVec;
 use itertools_num::linspace;
 use log::{info, warn, trace};
-use crate::base::dense::*;
+use crate::base::dense::{Op};
 use crate::util::time_dep_op::TimeDepMatrix;
 use num_traits::Float;
 use crate::util::{EigJob, EigRangeData, EigResolver, change_basis};
 use crate::util::degen::{handle_degeneracies_vals, handle_phases, degeneracy_detect, handle_degeneracies};
+use crate::ComplexScalar;
 
 
 pub struct TimePartitionOptions {
@@ -22,7 +23,8 @@ pub struct TimePartitionOptions {
 /// This struct implements a Time-Partitioned Hamiltonian
 ///
 pub struct TimePartHaml<'a, R: RealField>
-    where Complex<R>: ComplexField<RealField=R> + BlasScalar
+    where Complex<R>: ComplexScalar<R>
+    //where Complex<R>: ComplexField<RealField=R> //+ BlasScalar
 {
     basis_size: u32,
     time_range: (R, R),
@@ -34,8 +36,13 @@ pub struct TimePartHaml<'a, R: RealField>
     haml_sequence: Vec<TimeDepMatrix<'a, Complex<R>>>,
 }
 
-impl<'a, R: RealField + Float> TimePartHaml<'a, R>
-    where Complex<R>: ComplexField<RealField=R> + BlasScalar {
+impl<'a, R> TimePartHaml<'a, R>
+where R: RealField + Float,  Complex<R>: ComplexScalar<R>
+      //Complex<R>: ComplexField<RealField=R> //+ Tsyheevx
+//where Complex<R> : ComplexScalar<R>
+//where R: RealField
+    //where Complex<R>: ComplexField //<RealField=R> //+ BlasScalar
+{
     pub fn new(haml: TimeDepMatrix<'a, Complex<R>>, basis_size: u32, t0: R, tf: R, num_partitions: usize) -> Self {
         let time_partitions = Vec::from_iter(
             linspace(t0, tf, num_partitions + 1));
@@ -275,3 +282,31 @@ impl<'a, R: RealField + Float> TimePartHaml<'a, R>
     }
 }
 
+#[cfg(test)]
+mod tests{
+    use super::TimePartHaml;
+    use crate::util::{TimeDepMatrix, TimeDepMatrixTerm};
+    use crate::base::pauli::dense as pauli;
+    use num_complex::Complex64 as c64;
+    use num_complex::Complex;
+    use cblas::c32;
+
+    #[test]
+    fn test_part_haml(){
+        let tf = 10.0;
+        let sx = pauli::sx::<f64>();
+        let sz = pauli::sz::<f64>();
+
+        let fx = |t: f64| Complex::from(10.0*(0.5 - (t/tf)));
+        let fz = |t: f64| Complex::from(0.5);
+
+        let hx = TimeDepMatrixTerm::new(&sx, &fx);
+        let hz = TimeDepMatrixTerm::new(&sz, &fz);
+
+        let haml_a = TimeDepMatrix{terms: vec![hx.clone()]};
+        let haml_b = TimeDepMatrix{terms: vec![hz.clone()]};
+        let haml_sum = TimeDepMatrix{terms: vec![hx, hz]};
+
+        let haml = TimePartHaml::new(haml_sum, 2,0.0, tf, 10);
+    }
+}

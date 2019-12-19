@@ -11,7 +11,8 @@ pub trait QObj<N: ComplexField> :
 //VectorSpace<Field=N> +
 Sized +
 for<'b> AddAssign<&'b Self> +
-for<'b> SubAssign<&'b Self>{
+for<'b> SubAssign<&'b Self>
+{
 
 }
 
@@ -25,8 +26,11 @@ pub trait QRep<N: ComplexField>: Sized{
     fn qdim_ket(ket: &Self::KetRep) -> usize;
     fn qdim_bra(bra: &Self::BraRep) -> usize;
 
-    /// Takes the dot product of the bra and ket
-    fn qdot(bra: &Self::BraRep, ket: &Self::KetRep) -> N;
+    /// Takes the dot product of the bra and ket, where the bra is already in a conjugate representation
+    fn qbdot(bra: &Self::BraRep, ket: &Self::KetRep) -> N;
+
+    /// Takes the dot product of the conjugate of u with v
+    fn qdot(u: &Self::KetRep, v: &Self::KetRep) -> N;
 
     /// Adjoint-Swap the bra and ket, i.e
     ///   bra <- ket^H
@@ -65,7 +69,7 @@ pub trait QKet<N: ComplexField>: QObj<N> {
     }
 
     fn qdot(&self, other: & <<Self as QKet<N>>::Rep as QRep<N>>::BraRep) -> N{
-        <Self::Rep as QRep<N>>::qdot(other, self)
+        <Self::Rep as QRep<N>>::qbdot(other, self)
     }
     fn scal(&mut self, a: N) {
         <Self::Rep as QRep<N>>::kscal(a, self)
@@ -77,7 +81,7 @@ pub trait QBra<N: ComplexField>: QObj<N>{
     type Rep: QRep<N, BraRep=Self>;
 
     fn qdot(&self, other: &<<Self as QBra<N>>::Rep as QRep<N>>::KetRep) -> N{
-        <Self::Rep as QRep<N>>::qdot(self, other)
+        <Self::Rep as QRep<N>>::qbdot(self, other)
     }
 
 }
@@ -85,7 +89,6 @@ pub trait QBra<N: ComplexField>: QObj<N>{
 
 pub trait QOp<N: ComplexField>: QObj<N>{
     type Rep: QRep<N, OpRep=Self>;
-
 
     fn qdim(&self) -> usize{
         <Self::Rep as QRep<N>>::qdim_op(self)
@@ -95,6 +98,12 @@ pub trait QOp<N: ComplexField>: QObj<N>{
     }
 }
 
+pub fn qdot<QB, QK, QR, N>(bra: &QB, ket: &QK) -> N
+where N: ComplexField, QR: QRep<N, KetRep=QK, BraRep=QB>,
+      QB: QBra<N, Rep=QR>, QK: QKet<N, Rep=QR>
+{
+    bra.qdot(ket)
+}
 
 
 

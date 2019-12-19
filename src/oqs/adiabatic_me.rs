@@ -26,6 +26,7 @@ use vec_ode::exp::cfm::ExpCFMSolver;
 use vec_ode::AdaptiveODESolver;
 use crate::util::degen::{handle_degeneracies, degeneracy_detect, handle_degeneracies_vals, handle_phases, handle_relative_phases, handle_degeneracies_relative, qr_ortho, handle_degeneracies_relative_vals};
 use crate::util::diff::four_point_gl;
+use crate::ComplexScalar;
 //use alga::linear::NormedSpace;
 
 static AME_DIS_KINETIC_SCALE_LIM : f64 = 5.0e-1;
@@ -121,7 +122,7 @@ fn ame_liouvillian<R: RealField, B: Bath<R>>(
     lind_coh: &mut DMatrix<Complex<R>>,
     lindblad_ops: &Vec<DMatrix<Complex<R>>>
 )
-where Complex<R> : ComplexField<RealField=R>+BlasScalar
+where Complex<R> : ComplexScalar<R>
 {
     assert_eq!(lindblad_ops.len(), work.linds_ab.len(), "Number of lindblad operators mismatched");
     let one_half = R::from_subset(&(0.5_f64));

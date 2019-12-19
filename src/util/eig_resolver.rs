@@ -1,6 +1,7 @@
 use alga::general::{RealField, ComplexField, SubsetOf, SupersetOf};
 use lapacke::Layout;
 use blas_traits::BlasScalar;
+use blas_traits::Tsyheevx;
 use nalgebra::{DMatrix, DVector};
 use num_traits::{Zero, One};
 
@@ -47,14 +48,14 @@ impl EigJob{
 }
 
 
-struct EigWork<N: BlasScalar>{
+struct EigWork<N: ComplexField>{
     work: Vec<N>,
     rwork: Vec<N::RealField>,
     iwork: Vec<i32>,
     ifail: Vec<i32>
 }
 
-impl<N: BlasScalar> EigWork<N>{
+impl<N: Tsyheevx> EigWork<N>{
     fn new() -> Self{
         EigWork{work: Vec::new(), rwork: Vec::new(), iwork: Vec::new(), ifail: Vec::new()}
     }
@@ -79,7 +80,7 @@ impl<N: BlasScalar> EigWork<N>{
 /// This should be utilized when many decompositions are required on many different
 /// matrices with the same dimension within a tight loop, rather than calling built-in
 /// eig routines that allocate on every single call.
-pub struct EigResolver<N: BlasScalar>{
+pub struct EigResolver<N: ComplexField>{
     jobz: EigJob,
     range: EigRangeData<N::RealField>,
     a: DMatrix<N>,
@@ -89,7 +90,7 @@ pub struct EigResolver<N: BlasScalar>{
     eigvecs: DMatrix<N>
 }
 
-impl<N: BlasScalar> EigResolver<N>
+impl<N: Tsyheevx> EigResolver<N>
 {
     pub fn new(n: u32, jobz: EigJob, range: EigRangeData<N::RealField>,
                read_upper: bool) -> Self{

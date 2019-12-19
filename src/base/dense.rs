@@ -7,17 +7,18 @@ use nalgebra::{Matrix, DVector, RowDVector, DMatrix, Scalar};
 use nalgebra::{Dim};
 use nalgebra::base::storage::{StorageMut};
 use std::marker::PhantomData;
+use crate::ComplexScalar;
 
 pub type Ket<N> = DVector<Complex<N>>;
-pub type Bra<N> =RowDVector<Complex<N>>;
-pub type Op<N> = DMatrix<Complex<N>>;
+pub type Bra<N> = DVector<Complex<N>>;
+pub type Op<N> =  DMatrix<Complex<N>>;
 
 pub struct DenseQRep<N>
-where N: RealField
+where N: ComplexField
 { _phantom: PhantomData<(N)> }
 
 impl<R: RealField, > QRep<Complex<R>> for DenseQRep<R>
-where Complex<R>: BlasScalar + ComplexField<RealField=R>
+where Complex<R>: ComplexScalar<R>
 {
     type KetRep = Ket<R>;
     type BraRep = Bra<R>;
@@ -36,14 +37,21 @@ where Complex<R>: BlasScalar + ComplexField<RealField=R>
     }
 
 
-    fn qdot(bra: &Self::BraRep, ket: & Self::KetRep) -> Complex<R>{
-        bra.dotc(ket)
+    fn qbdot(bra: &Self::BraRep, ket: & Self::KetRep) -> Complex<R>{
+        bra.dot(ket)
     }
+
+    fn qdot(u: &Self::KetRep, v: &Self::KetRep) -> Complex<R> {
+        u.dotc(v)
+    }
+
     fn qswap(bra: &mut Self::BraRep, ket: & mut Self::KetRep){
         for (q,r) in bra.as_mut_slice().iter_mut().zip(
             ket.as_mut_slice().iter_mut()){
             std::mem::swap(q, r);
         }
+        bra.conjugate_mut();
+        ket.conjugate_mut();
     }
 
     fn khemv(op: &Self::OpRep, _alpha: Complex<R>,
@@ -80,7 +88,7 @@ where Complex<R>: BlasScalar + ComplexField<RealField=R>
 }
 
 
-impl<N: RealField + Scalar, R: Dim, C: Dim, S: StorageMut<Complex<N>, R, C> >
+impl<N: RealField, R: Dim, C: Dim, S: StorageMut<Complex<N>, R, C> >
 QObj<Complex<N>>
 for Matrix<Complex<N>, R, C, S>{ }
 
@@ -129,34 +137,48 @@ for Ket<N>{
     }
 }
 
-impl<N: RealField>
-TensorProd<Complex<N>, Bra<N>>
-for Bra<N>{
-    type Result = Bra<N>;
+//impl<N: RealField>
+//TensorProd<Complex<N>, Bra<N>>
+//for Bra<N>{
+//    type Result = Bra<N>;
+//
+//    fn tensor(a: Self, b:  Bra<N>) -> Self::Result{
+//        a.kronecker(&b)
+//    }
+//
+//    fn tensor_ref(a: &Self, b: & Bra<N>)-> Self::Result{
+//        a.kronecker(&b)
+//    }
+//}
 
-    fn tensor(a: Self, b:  Bra<N>) -> Self::Result{
-        a.kronecker(&b)
-    }
-
-    fn tensor_ref(a: &Self, b: & Bra<N>)-> Self::Result{
-        a.kronecker(&b)
-    }
-}
-
-impl<R: RealField> QOp<Complex<R>> for Op<R>
-where Complex<R>: BlasScalar + ComplexField<RealField=R>
+impl<N: RealField> QOp<Complex<N>> for Op<N>
+where Complex<N> : ComplexScalar<N>
 {
-    type Rep = DenseQRep<R>;
+    type Rep = DenseQRep<N>;
 }
 
 impl<N: RealField> QKet<Complex<N>> for Ket<N>
-where Complex<N>: BlasScalar + ComplexField<RealField=N>
+where Complex<N>: ComplexScalar<N>
 {
     type Rep = DenseQRep<N>;
 }
 
 impl<N: RealField> QBra<Complex<N>> for Bra<N>
-where Complex<N>: BlasScalar + ComplexField<RealField=N>
+where Complex<N>: ComplexScalar<N>
 {
     type Rep = DenseQRep<N>;
+}
+
+#[cfg(test)]
+mod tests{
+    use super::{Bra, Ket, QKet, QBra};
+    use crate::base::quantum::qdot;
+    #[test]
+    fn test_dense_qrep(){
+        let a : Bra<f64> = Bra::zeros(3);
+        let b : Ket<f64> = Ket::zeros(3);
+        //b.qdot(a);
+        let c = QBra::qdot(&a, &b);
+        let d = qdot(&a, &b);
+    }
 }
