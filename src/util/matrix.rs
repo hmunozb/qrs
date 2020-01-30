@@ -66,11 +66,12 @@ pub fn ad_mul_to<N: Scalar + BlasScalar>(
     gemm(c, a, b, Transpose::Conjugate, Transpose::None);
 }
 
+#[allow(non_snake_case)]
 /// Z <- U^dag A U
 pub fn change_basis_to<N: Scalar+BlasScalar>(
         A: &DMatrix<N>,
         U: &DMatrix<N>,
-        temp: &mut DMatrix<N>,
+        _temp: &mut DMatrix<N>,
         out: &mut DMatrix<N>){
     let a_sh = A.shape();
     let u_sh = U.shape();
@@ -79,6 +80,7 @@ pub fn change_basis_to<N: Scalar+BlasScalar>(
     gemm(out, U, &m1, Transpose::Conjugate, Transpose::None);
 }
 
+#[allow(non_snake_case)]
 /// Performs U^dag A U
 pub fn change_basis<N: Scalar+BlasScalar>(
     A: &DMatrix<N>,
@@ -94,6 +96,7 @@ pub fn change_basis<N: Scalar+BlasScalar>(
     //U.ad_mul(&(A * U))
 }
 
+#[allow(non_snake_case)]
 /// Performs U A U^dag where A is Hermitian
 pub fn unchange_basis<N: Scalar+BlasScalar>(
     A: &DMatrix<N>,

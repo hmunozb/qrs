@@ -1,6 +1,4 @@
-use alga::general::{ Module, ClosedMul, ClosedAdd};
-use alga::general::{ Ring, RingCommutative};
-use alga::general::MultiplicativeMonoid;
+use alga::general::{ ClosedMul, ClosedAdd};
 //use num_traits::{Zero, One};
 use std::ops::{Add, Mul, AddAssign, DerefMut};
 use std::boxed::Box;
@@ -159,7 +157,7 @@ impl<S, T>  DynVectorSpace<S, T>
             DynVectorSpace::Element(s) => f(s),
             DynVectorSpace::Add(a1, a2) =>
                 { a1.linear_apply(f); a2.linear_apply(f);}
-            DynVectorSpace::Scale(a, t) =>
+            DynVectorSpace::Scale(a, _t) =>
                 { a.linear_apply(f);}
             _ => ()
         };
@@ -195,7 +193,7 @@ impl<S, T>  DynVectorSpace<S, T>
 {
     pub fn simplify(self) -> Self
     {
-        let mut me = self;
+        let me = self;
         match me{
             DynVectorSpace::Zero => DynVectorSpace::Zero,
             DynVectorSpace::Element(s) => {

@@ -1,6 +1,5 @@
-use alga::general::{RealField, ComplexField, SubsetOf, SupersetOf};
+use alga::general::{RealField, ComplexField, SupersetOf};
 use lapacke::Layout;
-use blas_traits::BlasScalar;
 use blas_traits::Tsyheevx;
 use nalgebra::{DMatrix, DVector};
 use num_traits::{Zero, One};

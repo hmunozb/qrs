@@ -1,15 +1,14 @@
 ///
 
-#[macro_use]
 extern crate approx;
 extern crate alga;
 extern crate nalgebra;
 extern crate log;
+//extern crate packed_simd;
 
 use alga::general::{RealField, ComplexField};
 use blas_traits::BlasScalar;
-use num_complex::Complex32 as c32;
-use num_complex::Complex64 as c64;
+
 
 pub trait ComplexScalar<R: RealField> :
     ComplexField<RealField=R> + BlasScalar {}
@@ -23,4 +22,4 @@ pub mod algebra;
 pub mod base;
 pub mod oqs;
 pub mod ode;
-
+pub mod semi;

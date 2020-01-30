@@ -1,10 +1,10 @@
-use alga::general::ComplexField;
-use num_complex::Complex;
+
+
 use std::collections::btree_map::{BTreeMap, Entry};
 use crate::algebra::free_algebra::{DynFreeAlgebra, DynVectorSpace, DynVectorSpaceZero, DynAlgebraOne};
 use std::iter::FromIterator;
-use itertools;
-use num_traits::{Zero, One};
+
+//use num_traits::{Zero, One};
 
 /// Represents a single product of bosonic operators in normal form
 /// i.e. each mapping  (i, (nr, nl)) represents the operation of lowering the number state i by nl
@@ -167,7 +167,7 @@ impl BosonicBasisKet{
                         annihilate = true;
                     }
                 }
-                Entry::Vacant(mut e) => {
+                Entry::Vacant(_e) => {
                     annihilate = true;
                 }
             }
@@ -194,7 +194,7 @@ impl BosonicBasisKet{
                         annihilate = true;
                     }
                 }
-                Entry::Vacant(mut e) => {
+                Entry::Vacant(_e) => {
                     annihilate = true;
                 }
             }

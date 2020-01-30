@@ -2,11 +2,10 @@ use crate::util::*;
 use crate::base::quantum::{QRep};
 use crate::base::dense::*;
 use crate::oqs::bath::Bath;
-use crate::ode::dense::DenseExpiSplit;
-use crate::ode::super_op::{KineticExpSplit, CoherentExpSplit, DenMatExpiSplit, DenMatPerturbExpSplit};
+//use crate::ode::dense::DenseExpiSplit;
+use crate::ode::super_op::{KineticExpSplit, CoherentExpSplit, DenMatExpiSplit};
 use crate::ode::super_op::{MaybeScalePowExp};
 use alga::general::{ComplexField, RealField};
-use crate::approx::AbsDiffEq;
 use blas_traits::BlasScalar;
 use log::{info, error, warn, trace};
 use num_traits::{Zero, Float};
@@ -14,17 +13,17 @@ use num_complex::Complex;
 use num_complex::Complex64 as c64;
 use nalgebra::{DVector, DMatrix};
 use smallvec::SmallVec;
-use vec_ode::exp::split_exp::{SemiComplexO4ExpSplit, StrangSplit,
-                              CommutativeExpSplit, TripleJumpExpSplit,
+use vec_ode::exp::split_exp::{SemiComplexO4ExpSplit, //StrangSplit,
+                              CommutativeExpSplit, //TripleJumpExpSplit,
                               RKNR4ExpSplit};
-use itertools::Itertools;
 use vec_ode::exp::{DirectSumL, ExponentialSplit};
-use ndarray_stats::*;
-use ndarray::{ArrayBase, Array, Array1, Array2, ArrayView2, ShapeBuilder};
+use ndarray::{ ArrayView2};
 use vec_ode::{ODEState, ODEStep, ODESolver, ODESolverBase, ODEError, LinearCombination};
 use vec_ode::exp::cfm::ExpCFMSolver;
 use vec_ode::AdaptiveODESolver;
-use crate::util::degen::{handle_degeneracies, degeneracy_detect, handle_degeneracies_vals, handle_phases, handle_relative_phases, handle_degeneracies_relative, qr_ortho, handle_degeneracies_relative_vals};
+use crate::util::degen::{handle_degeneracies, degeneracy_detect,
+                         handle_relative_phases, handle_degeneracies_relative,
+                         handle_degeneracies_relative_vals};
 use crate::util::diff::four_point_gl;
 use crate::ComplexScalar;
 //use alga::linear::NormedSpace;
@@ -254,7 +253,7 @@ fn assert_orthogonal<T>(v:& DMatrix<Complex<T>>)
 where T: RealField
 {
     let vad = v.adjoint();
-    let mut vv : DMatrix<Complex<T>> = vad * v;
+    let vv : DMatrix<Complex<T>> = vad * v;
 
     assert!(vv.is_identity(T::from_subset(&1.0e-9)), "Orthogonal assertion failed");
 }
@@ -336,8 +335,8 @@ impl<'a, B: Bath<f64>> AME<'a, B> {
                     //let ep0 = self.haml.advance_partition(&self.prev_eigvecs.0, p-1);
                     //let epf = self.haml.advance_partition(&self.prev_eigvecs.1, p-1);
                     let proj = self.haml.projector(p-1);
-                    let mut ep0 = proj.ad_mul(&self.prev_eigvecs.0);
-                    let mut epf = proj.ad_mul(&self.prev_eigvecs.1);
+                    let ep0 = proj.ad_mul(&self.prev_eigvecs.0);
+                    let epf = proj.ad_mul(&self.prev_eigvecs.1);
 
                     //let eq0 = qr_ortho(ep0);
                     //let eqf = qr_ortho(epf);
@@ -363,7 +362,7 @@ impl<'a, B: Bath<f64>> AME<'a, B> {
 
     /// Loads the eigenvalues and eigenvectors of time t
     /// No gauge or degeneracy handling
-    fn load_eigv(&mut self, t: f64, p: usize, degen_handle: bool){
+    fn load_eigv(&mut self, t: f64, p: usize, _degen_handle: bool){
         let (vals, vecs) =
             self.haml.eig_p(t, Some(p ));
         self.eigvecs = vecs;
@@ -404,9 +403,9 @@ impl<'a, B: Bath<f64>> AME<'a, B> {
     /// In the adiabatic frame,
     ///  K_A = i W^{dag} (dW/dt)
     pub fn diabatic_driver(&mut self, t: f64, p: usize, dt: f64){
-        let n = DenseQRep::qdim_op(&self.adiab_haml);
-        let (vals1, vecs1) = self.haml.eig_p(t-dt, Some(p));
-        let (vals2, vecs2) = self.haml.eig_p(t+dt, Some(p));
+        //let n = DenseQRep::qdim_op(&self.adiab_haml);
+        let (_vals1, vecs1) = self.haml.eig_p(t-dt, Some(p));
+        let (_vals2, vecs2) = self.haml.eig_p(t+dt, Some(p));
 
         let mut w1 = self.eigvecs.ad_mul(&vecs1);
         let mut w2 = self.eigvecs.ad_mul(&vecs2);
@@ -484,7 +483,7 @@ impl<'a, B: Bath<f64>> AME<'a, B> {
         }
 
         let prev_t = self.prev_t;
-        let (mut v0, mut vf) =
+        let (v0, vf) =
         match prev_t{
             None =>{
                 self.load_eigv(t0, p, false);
@@ -573,7 +572,7 @@ impl<'a, B: Bath<f64>> AME<'a, B> {
         dvecs1 /= Complex::from(delta_t);
         // Finally, evaluate the diabatic perturbation -K_A = -i W^{dag} dW/dt
         // at the quadrature points
-        let mut dvecs = [dvecs0, dvecs1];
+        let dvecs = [dvecs0, dvecs1];
         for (i, (dv,(haml, dsl_lind))) in dvecs.iter()
                 .zip(haml_vec.into_iter().zip(dsl_vec.into_iter()))
                 .enumerate(){
@@ -643,7 +642,7 @@ pub fn solve_ame<B: Bath<f64>>(
     let mut norm_est = condest::Normest1::new(n, 2);
     let mut rho0 = initial_state;
     let mut last_delta_t : Option<f64> = None;
-    let mut last_eigs : Op<f64> = Op::<f64>::zeros(n,n);
+    //let mut last_eigs : Op<f64> = Op::<f64>::zeros(n,n);
     let mut rho_vec: Vec<Op<f64>> = Vec::new();
     let mut eigvecs: Vec<Op<f64>> = Vec::new();
     let mut results_parts = Vec::new();
@@ -653,7 +652,7 @@ pub fn solve_ame<B: Bath<f64>>(
     eigvecs.push(ame.haml.eig_p(partitions[0], Some(0)).1);
 
     for (p, (&ti0, &tif)) in partitions.iter()
-            .zip(partitions.iter().skip((1)))
+            .zip(partitions.iter().skip(1))
             .enumerate()
     {
         let delta_t = tif - ti0;
@@ -691,22 +690,20 @@ pub fn solve_ame<B: Bath<f64>>(
             .with_init_step(dt)
             ;
 
-        let mut iters = 0;
-        let mut rejects = 0;
+        //let mut iters = 0;
+        //let mut rejects = 0;
         let mut ema_rej :f64 = 0.0;
         loop{
             let res = solver.step();
 
             match res{
                 ODEState::Ok(step) => {
-                    iters += 1;
                     match step{
                         ODEStep::Step(dt) => {
                             trace!("t={}\tStepped by {}", solver.ode_data().t, dt);
                             ema_rej = ema_rej * 0.90;
                         },
                         ODEStep::Reject => {
-                            rejects += 1;
                             ema_rej = ema_rej*0.90 + 0.10*1.0;
                             if ema_rej > 0.9{
                                 panic!("Rejection rate too large.");
@@ -731,13 +728,13 @@ pub fn solve_ame<B: Bath<f64>>(
                     trace!("Partition Done");
                     break;
                 },
-                ODEState::Err(E) => {
+                ODEState::Err(e) => {
                     error!("ODE solver error occurred.");
-                    return Err(E);
+                    return Err(e);
                 }
             }
             //Enforce Hermiticity after each step
-            let mut dat = solver.ode_data_mut();
+            let dat = solver.ode_data_mut();
             dat.x.adjoint_to(&mut rhodag);
             dat.x += &rhodag;
             dat.x /= c64::from(2.0);

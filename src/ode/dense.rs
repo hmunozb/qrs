@@ -1,8 +1,8 @@
 use alga::general::{RealField, ComplexField};
 use blas_traits::BlasScalar;
 use num_complex::Complex;
-use vec_ode::{ODEState, ODESolver, ODESolverBase, LinearCombination, AdaptiveODESolver};
-use crate::base::quantum::{QRep};
+use vec_ode::{ODEState, ODESolver, ODESolverBase,  AdaptiveODESolver};
+//use crate::base::quantum::{QRep};
 use crate::base::dense::*;
 use crate::util::{EigResolver, EigJob, EigRangeData};
 use crate::util::TimeDepMatrix;
@@ -12,7 +12,6 @@ use vec_ode::exp::{ExponentialSplit, Commutator, NormedExponentialSplit};
 use vec_ode::exp::{ExpSplitMidpointSolver, MidpointExpLinearSolver};
 use vec_ode::exp::magnus::MagnusExpLinearSolver;
 use vec_ode::exp::cfm::ExpCFMSolver;
-use nalgebra::{Dynamic, Matrix, U1, VecStorage};
 use itertools::Itertools;
 
 ///Defines the exponential e^{-i H} for a Hermitian operator H
@@ -103,6 +102,7 @@ where Complex<T> : BlasScalar + ComplexField<RealField=T>{
     }
 }
 
+#[allow(non_snake_case)]
 pub fn solve_se_exp<'a, R: RealField+Float>(
     H: &'a TimeDepMatrix<'a, Complex<R>>,
     t0: R, tf: R, psi0: Ket<R>, dt: R
@@ -122,6 +122,7 @@ pub fn solve_se_exp<'a, R: RealField+Float>(
     psi
 }
 
+#[allow(non_snake_case)]
 pub fn solve_se_me42<'a, R: RealField+Float>(
     H: &'a TimeDepMatrix<'a, Complex<R>>,
     t0: R, tf: R, psi0: Ket<R>, dt: R
@@ -147,7 +148,7 @@ pub fn solve_se_me42<'a, R: RealField+Float>(
 
     psi
 }
-
+#[allow(non_snake_case)]
 pub fn solve_se_cfm42<'a, R: RealField+Float>(
     H: &'a TimeDepMatrix<'a, Complex<R>>,
     t0: R, tf: R, psi0: Ket<R>, dt: R
@@ -165,7 +166,7 @@ pub fn solve_se_cfm42<'a, R: RealField+Float>(
         .with_step_range(dt*R::from_subset(&1.0e-4),
                          dt*R::from_subset(&1.0e4))
         .with_init_step(dt);
-    ;
+
     while let ODEState::Ok(_) = solver.step(){
         0;
     }
@@ -175,6 +176,7 @@ pub fn solve_se_cfm42<'a, R: RealField+Float>(
     psi
 }
 
+#[allow(non_snake_case)]
 pub fn solve_se_split<'a, R: RealField+Float>(
     HA: &'a TimeDepMatrix<'a, Complex<R>>, HB: &'a TimeDepMatrix<'a, Complex<R>>,
     t0: R, tf: R, psi0: Ket<R>, dt: R

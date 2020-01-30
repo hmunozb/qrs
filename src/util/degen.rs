@@ -4,7 +4,6 @@ use num_complex::Complex;
 use smallvec::SmallVec;
 use blas_traits::BlasScalar;
 use lapacke::Layout;
-use approx::RelativeEq;
 
 pub type DegenArray = Vec<SmallVec<[usize; 4]>>;
 
@@ -20,7 +19,7 @@ where S: ComplexField{
         panic!("gram_schimdt_ortho: matrix must be square")
     }
     let n = sh.0;
-    let mut norms : DVector<S::RealField> = DVector::zeros(n);
+    //let mut norms : DVector<S::RealField> = DVector::zeros(n);
 
     v.column_mut(0).normalize_mut();
     for i in 1..n{
@@ -78,7 +77,7 @@ where S: ComplexField+BlasScalar
 pub fn handle_degeneracies_qr<S>(w_deg: &DMatrix<S>, w_rel: &DMatrix<S>) -> DMatrix<S>
 where S: ComplexField+BlasScalar
 {
-    let mut v = w_deg.ad_mul(w_rel);  // k x k w_rel onto w_deg overlap
+    let v = w_deg.ad_mul(w_rel);  // k x k w_rel onto w_deg overlap
     let q = qr_ortho(v);  // reorthogonalize in w_deg subspace
     let w_rot_deg = w_deg * &q; // undo the q rotation
     w_rot_deg

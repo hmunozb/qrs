@@ -1,18 +1,17 @@
 use std::iter::FromIterator;
 
-use alga::general::{ComplexField, RealField};
-use blas_traits::{BlasScalar, Tsyheevx};
+use alga::general::{ RealField};
+//use blas_traits::{BlasScalar, Tsyheevx};
 use num_traits::{One, Zero};
 use num_complex::Complex;
 use nalgebra::{DMatrix, DVector, U1, Dynamic};
-use smallvec::SmallVec;
 use itertools_num::linspace;
 use log::{info, warn, trace};
 use crate::base::dense::{Op};
 use crate::util::time_dep_op::TimeDepMatrix;
 use num_traits::Float;
 use crate::util::{EigJob, EigRangeData, EigResolver, change_basis};
-use crate::util::degen::{handle_degeneracies_vals, handle_phases, degeneracy_detect, handle_degeneracies};
+//use crate::util::degen::{handle_degeneracies_vals, handle_phases, degeneracy_detect, handle_degeneracies};
 use crate::ComplexScalar;
 
 
@@ -106,7 +105,7 @@ where R: RealField + Float,  Complex<R>: ComplexScalar<R>
             let ht = eiger.borrow_matrix();
             self.haml.eval_to(ht, *t);
             eiger.eig();
-            let mut vecs = eiger.vecs().clone();
+            let vecs = eiger.vecs().clone();
 //            let vals = eiger.vals().as_slice().get(0..self.basis_size as usize).unwrap();
 //            let vals = DVector::from_column_slice(vals);
 //            let degens = degeneracy_detect(&vals, None);
@@ -123,7 +122,7 @@ where R: RealField + Float,  Complex<R>: ComplexScalar<R>
         }
 
         for p in 0..(self.partition_midpoints.len()-1){
-            let mut wi = self.basis_sequence[p].clone();
+            let wi = self.basis_sequence[p].clone();
 
             let wj = &self.basis_sequence[p+1];
             let proj = wi.ad_mul( wj);
@@ -234,7 +233,7 @@ where R: RealField + Float,  Complex<R>: ComplexScalar<R>
         let mut eiger = self.p_eiger();
         self.haml_sequence[part].eval_to(eiger.borrow_matrix(), t);
 
-        let (vals, mut vecs) = eiger.into_eigs();
+        let (vals, vecs) = eiger.into_eigs();
 
 //        if handle_degens{
 //            handle_degeneracies_vals(&vals, &mut vecs, None);

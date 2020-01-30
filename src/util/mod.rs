@@ -5,6 +5,8 @@ mod partitioned_haml;
 mod time_dep_op;
 pub mod degen;
 pub mod diff;
+//pub mod simd;
+pub use simd_phys;
 //mod complex;
 
 pub use eig_resolver::*;

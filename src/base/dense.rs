@@ -1,9 +1,8 @@
 use super::quantum::*;
 use crate::util::{EigResolver, EigJob, EigRangeData};
 use alga::general::{RealField, ComplexField};
-use blas_traits::BlasScalar;
 use num_complex::Complex;
-use nalgebra::{Matrix, DVector, RowDVector, DMatrix, Scalar};
+use nalgebra::{Matrix, DVector, DMatrix};
 use nalgebra::{Dim};
 use nalgebra::base::storage::{StorageMut};
 use std::marker::PhantomData;
@@ -15,7 +14,7 @@ pub type Op<N> =  DMatrix<Complex<N>>;
 
 pub struct DenseQRep<N>
 where N: ComplexField
-{ _phantom: PhantomData<(N)> }
+{ _phantom: PhantomData<N> }
 
 impl<R: RealField, > QRep<Complex<R>> for DenseQRep<R>
 where Complex<R>: ComplexScalar<R>

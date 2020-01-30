@@ -1,20 +1,20 @@
-use alga::general::{RealField, ComplexField, SupersetOf};
+use alga::general::{RealField, ComplexField};
 use expm::Expm;
-use ndarray::{Array2, NdIndex};
-use ndarray::{ArrayView, ArrayView2};
-use ndarray::ShapeBuilder;
+use ndarray::{Array2};
+use ndarray::{ArrayView2};
+
 use num_complex::Complex;
 use num_traits::Float;
 use vec_ode::exp::{ExponentialSplit, Commutator};
 use log::warn;
 use crate::base::dense::*;
 use blas_traits::BlasScalar;
-use crate::util::{EigResolver, EigJob, EigRangeData, outer_zip_to, change_basis_to, change_basis, unchange_basis};
+use crate::util::{EigResolver, EigJob, EigRangeData, outer_zip_to,  change_basis, unchange_basis};
 use std::iter::FromIterator;
-use nalgebra::{DMatrix, Dynamic, Matrix};
+use nalgebra::{DMatrix};
 use itertools::Itertools;
 use vec_ode::LinearCombination;
-use std::marker::PhantomData;
+
 
 ///Defines the exponential e^{-i H} for a Hermitian operator H
 /// For Split ODE solvers
@@ -267,7 +267,7 @@ where   T: RealField,
     }
 
     fn pow_order(&self, x: &Op<T>) -> i64 {
-        let (n, m) = x.shape();
+        let (n, _m) = x.shape();
         let mut k = T::zero();
         //assert!(n==m);
         for i in 0..n{
@@ -316,7 +316,7 @@ where   T: RealField,
         let (u, d) = u;
         let mut x0 : Op<T> = x.clone();
         //let mut x1 : &Op<T>;
-        for i in 0..*d{
+        for _i in 0..*d{
             let x1 = self.sp.map_exp(u, &x0);
             x0 = x1;
         }
