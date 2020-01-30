@@ -1,27 +1,23 @@
 use crate::util::simd_phys::vf64::{Aligned4xf64};
-use crate::util::simd_phys::r3::{cross_product, cross_exponential_3d, Vector3d4xf64, Matrix3d4xf64};
+use crate::util::simd_phys::r3::{Vector3d4xf64, Matrix3d4xf64};
 
-use ndarray::{Axis, Array1, Array2, ArrayView1, ArrayViewMut1, ArrayView2, Array3, ArrayView3};
-use nalgebra::{Vector3, Matrix3, Matrix};
+use ndarray::{Axis, Array2, ArrayView1, ArrayViewMut1, ArrayView2, ArrayView3};
+//use nalgebra::{Vector3, Matrix3, Matrix};
 use num_traits::Zero;
 use rand::Rng;
-use rand_distr::Normal;
 use itertools;
 //use simd_phys::aligned::Aligned4x64;
-use std::ops::Mul;
-use std::vec::Vec;
-use std::convert::TryInto;
 use simd_phys::r3::cross_exponential_vector3d;
 //use simd_phys::aligned::Aligned4x64;
 
-type SpinVector3DAligned4xf64 =  Vector3d4xf64;
-type SpinArray3DAligned4x64 = [Aligned4xf64; 3];
+pub type SpinVector3DAligned4xf64 =  Vector3d4xf64;
+//type SpinArray3DAligned4x64 = [Aligned4xf64; 3];
 
-static ZERO_SPIN_ARRAY_3D: SpinArray3DAligned4x64 = [Aligned4xf64{dat: [0.0, 0.0, 0.0, 0.0]}; 3];
+//static ZERO_SPIN_ARRAY_3D: SpinArray3DAligned4x64 = [Aligned4xf64{dat: [0.0, 0.0, 0.0, 0.0]}; 3];
 
 
-fn xyz_to_array_chunks(arr: ArrayView2<f64>,
-                       mut chunk_array: ArrayViewMut1<SpinArray3DAligned4x64>) {
+pub fn xyz_to_array_chunks(arr: ArrayView2<f64>,
+                       mut chunk_array: ArrayViewMut1<SpinVector3DAligned4xf64>) {
     let shape = arr.shape();
     if shape[1] != 3{
         panic!("xyz_to_array_chunks: 3 spatial dimensions required.");
@@ -151,11 +147,11 @@ pub fn spin_langevin_step<Fh, R, Fr>(
         *chi2 = rand_xi_f(rng) * b;
     }
     // Hamiltonian field update
-    let h_update = |h: &mut Array2<SpinVector3DAligned4xf64>, m: & Array2<SpinVector3DAligned4xf64> |{
+    let h_update = |t: f64, h: &mut Array2<SpinVector3DAligned4xf64>, m: & Array2<SpinVector3DAligned4xf64> |{
         for (mut h_row, m_row) in
                 h.axis_iter_mut(Axis(0)).zip(m.axis_iter(Axis(0)))
         {
-            haml_fn(t0, &m_row, &mut h_row);
+            haml_fn(t, &m_row, &mut h_row);
             sl_add_dissipative(&mut h_row, & m_row, k);
         }
     };
@@ -192,9 +188,9 @@ pub fn spin_langevin_step<Fh, R, Fr>(
     // m[\delta_t] :=  \exp{\Omega_{22}} m_0
 
     // Stage 1 Computation
-    h_update(haml_10, m0);
-    h_update(haml_11, m0);
-    h_update(haml_12, m0);
+    h_update(t0, haml_10, m0);
+    h_update(t1, haml_11, m0);
+    h_update(t2, haml_12, m0);
 
 
     // Generator updates
@@ -221,11 +217,11 @@ pub fn spin_langevin_step<Fh, R, Fr>(
 
     // Evaluate m21 then update H21
     m_update(&*omega_11, spins_t0, spins_t);
-    h_update(haml_21, &*spins_t);
+    h_update(t1, haml_21, &*spins_t);
 
     // Evaluate m22 then update H22
     m_update(&*omega_12, spins_t0, spins_t);
-    h_update(haml_22, &*spins_t);
+    h_update(t2, haml_22, &*spins_t);
 
 
     // Finally evaluate \Omega_2
@@ -241,10 +237,12 @@ pub fn spin_langevin_step<Fh, R, Fr>(
 
 }
 
-pub fn spin_langevin_me2(
-    m0: ArrayView3<f64>,){
-
-}
+//pub fn spin_langevin_me2(
+//    m0: ArrayView3<f64>,
+//
+//){
+//
+//}
 
 
 
@@ -288,7 +286,9 @@ pub fn spin_langevin_me2(
 mod tests{
     use ndarray::{Array1, Array2};
     use crate::util::simd::Aligned4xf64;
-    use crate::semi::langevin::{spin_langevin_dmdt, sl_add_dissipative, SpinArray3DAligned4x64, xyz_to_array_chunks, ZERO_SPIN_ARRAY_3D};
+    use crate::semi::langevin::{spin_langevin_dmdt, sl_add_dissipative, SpinArray3DAligned4x64,
+                                xyz_to_array_chunks};
+    use num_traits::Zero;
 
     #[test]
     fn test_spin_langevin_dmdt(){
@@ -297,13 +297,13 @@ mod tests{
                     0.0, 1.0, 0.0,
                     0.5, 0.5, 0.0,
                     0.5, -0.5, 0.0]).unwrap();
-        let mut haml = Array1::from_elem((1,), ZERO_SPIN_ARRAY_3D);
+        let mut haml = Array1::from_elem((1,), Zero::zero());
 
         xyz_to_array_chunks(haml_arr.view(), haml.view_mut());
         let spins_arr = Array2::from_shape_vec((4, 3),
             vec![0.0, 0.0, 1.0,    0.0, 0.0, 1.0,    0.0, 0.0, 1.0,    0.0, 0.0, 1.0]
         ).unwrap();
-        let mut spins = Array1::from_elem((1,), ZERO_SPIN_ARRAY_3D);
+        let mut spins = Array1::from_elem((1,), Zero::zero());
         xyz_to_array_chunks(spins_arr.view(), spins.view_mut());
 
         //let mut dm = Array1::from_elem((1,), ZERO_SPIN_ARRAY_3D);
