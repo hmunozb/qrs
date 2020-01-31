@@ -114,18 +114,54 @@ impl SpinLangevinWorkpad{
     }
 }
 
-/// Peform a step of the Spin-Langevin equation equation using a 2nd order nonlinea Magnus propagator
+/// Peform a step of the Spin-Langevin stochastic differential equation (Stratonovich form)
+/// using a 2nd order nonlinear Magnus propagator
+///
+///      \dd M   =  ( H(M) + \eta H(M) \cross M ) \cross M  \dd t + \sqrt(b) \dd xi(t) \cross M
+///
+/// Parameters:
 /// work: SpinLangevinWorkpad, arrays of instances x spins x (3D x 4) SIMD packets
-///     i.e. a total of (4*instances) x spins  3D Euclidean vectors
+///         i.e. a total of (4*instances) x spins  3D Euclidean vectors
 /// haml_update: Function pdate the local fields due to the spins at time t. Should read/modify
 ///             an ArrayView1<SpinVector3DAligned4xf64>, where the array dimension is over spin indices
-/// k: Dissipation strength
-/// b: stochastic noise strength
+/// eta : Dissipation strength
+/// b: stochastic noise strength  (Should be proportional to $ K_b T \eta$ for a temperature T. See note)
 /// rng: an RNG engine
-/// rand_xi_f: normalized noise process to include
+/// rand_xi_f: Noise increment process. (Typically normalized Gaussian noise)
+///
+/// NOTE ON SEMICLASSICAL PHYSICS
+///     The Spin-Langevin equation is obtained as the semiclassical limit of N unentangled
+///     spin S particles interacting according to a quantum Hamiltonian on the spin states. It is
+///     numerically optimized for N-body SO(3) dynamics due to the Lie algebra isomorphism
+///         [ S_x,  S_y ] = i S_z         <--->          e_x \cross e_y = e_z   (and cyclic perms.)
+///     where S_i are the angular momentum operators of the spins and e_i are 3D Euclidean unit vectors.
+///
+///     In particular, for the semiclassical limit of a N-spin-1/2 Hamiltonian in terms of Pauli matrices,
+///     as $S_i = \frac{1}{2} \sigma_i  (\hbar \equiv 1)$,  each K-body interaction term should be
+///     rescaled by 2^K. Additionally, the single-qubit coupling $\eta$ of the open system dynamics
+///     should be rescaled by 2 in the Spin-Langevin equation. Failing to rescale will result
+///     in (likely incorrect) dynamics over an incorrect time scale.
+///
+///     Nuclear/Particle physics applications should similarly rescale by the gyromagnetic ratio
+///     where appropriate so that the Hamiltonian is in terms of S_i operators rather than
+///     magnetic moments.
+///
+/// NOTE ON SDE FORM:
+///     The SDE stepping method used here is based on the Stratonovich form.
+///     However, the Ito and Stratonovich forms of the Spin-Langevin equations are the same
+///     to accuracy $ O( \eta * k_b T * \delta_t )$. The Stratonovich form is preferred as it corresponds
+///     to the physical limit where the correlation time of the noise source goes to zero.
+///
+///
+/// Useful References:
+/// 1.  Jayannavar, A. M. Brownian motion of spins; generalized spin Langevin equation.
+///     Z. Physik B - Condensed Matter 82, 153–156 (1991).
+/// 2.  Albash, T. & Lidar, D. A. Demonstration of a Scaling Advantage for a Quantum Annealer over
+///     Simulated Annealing. Phys. Rev. X 8, 031016 (2018).
+///
 pub fn spin_langevin_step<Fh, R, Fr>(
     work :&mut SpinLangevinWorkpad, t0: f64, delta_t : f64,
-    k: f64, b: f64,
+    eta: f64, b: f64,
     haml_fn: Fh,
     rng: &mut R,
     rand_xi_f: Fr,
@@ -138,13 +174,15 @@ pub fn spin_langevin_step<Fh, R, Fr>(
     let t2 = t0 + delta_t;
     let delta_t = Aligned4xf64::from(delta_t);
 
-    let b = Aligned4xf64::from(b);
+    assert!(b >= 0.0, "Stochastic strength must be non-negative");
+
+    let b_sqrt = Aligned4xf64::from(b.sqrt());
     // Populate random noise arrays
     let noise_1 = &mut work.chi1;
     let noise_2 = &mut work.chi2;
     for (chi1, chi2) in itertools::zip(noise_1.iter_mut(), noise_2.iter_mut()){
-        *chi1 = rand_xi_f(rng) * b;
-        *chi2 = rand_xi_f(rng) * b;
+        *chi1 = rand_xi_f(rng) * b_sqrt;
+        *chi2 = rand_xi_f(rng) * b_sqrt;
     }
     // Hamiltonian field update
     let h_update = |t: f64, h: &mut Array2<SpinVector3DAligned4xf64>, m: & Array2<SpinVector3DAligned4xf64> |{
@@ -152,7 +190,7 @@ pub fn spin_langevin_step<Fh, R, Fr>(
                 h.axis_iter_mut(Axis(0)).zip(m.axis_iter(Axis(0)))
         {
             haml_fn(t, &m_row, &mut h_row);
-            sl_add_dissipative(&mut h_row, & m_row, k);
+            sl_add_dissipative(&mut h_row, & m_row, eta);
         }
     };
     // Spin propagation update
