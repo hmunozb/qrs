@@ -160,7 +160,9 @@ impl SpinLangevinWorkpad{
 ///     Simulated Annealing. Phys. Rev. X 8, 031016 (2018).
 ///
 pub fn spin_langevin_step<Fh, R, Fr>(
-    work :&mut SpinLangevinWorkpad, t0: f64, delta_t : f64,
+    m0: &Array2<SpinVector3DAligned4xf64>, mf: &mut Array2<SpinVector3DAligned4xf64>,
+    t0: f64, delta_t : f64,
+    work :&mut SpinLangevinWorkpad,
     eta: f64, b: f64,
     haml_fn: Fh,
     rng: &mut R,
@@ -174,6 +176,8 @@ pub fn spin_langevin_step<Fh, R, Fr>(
     let t2 = t0 + delta_t;
     let delta_t = Aligned4xf64::from(delta_t);
 
+    assert_eq!(m0.raw_dim(), work.h0.raw_dim());
+    assert_eq!(mf.raw_dim(), m0.raw_dim());
     assert!(b >= 0.0, "Stochastic strength must be non-negative");
 
     let b_sqrt = Aligned4xf64::from(b.sqrt());
@@ -204,7 +208,7 @@ pub fn spin_langevin_step<Fh, R, Fr>(
         }
     };
 
-    let m0 = &work.m0;
+    //let m0 = &work.m0;
     let haml_10 = &mut work.h0;
     let haml_11 = &mut work.h1;
     let haml_12 = &mut work.h2;
@@ -245,8 +249,8 @@ pub fn spin_langevin_step<Fh, R, Fr>(
             + (chi1 + chi2) * (delta_t/2.0).map(f64::sqrt);
     }
 
-    let spins_t0 = & work.m0;
-    let spins_t = &mut work.m1;
+    let spins_t0 = m0;
+    let spins_t = mf;
     let haml_20 = haml_10;
     let haml_21 = haml_11;
     let haml_22 = haml_12;
