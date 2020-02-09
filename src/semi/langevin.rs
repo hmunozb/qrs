@@ -8,6 +8,7 @@ use rand::Rng;
 use itertools;
 //use simd_phys::aligned::Aligned4x64;
 use simd_phys::r3::cross_exponential_vector3d;
+use nalgebra::Vector3;
 //use simd_phys::aligned::Aligned4x64;
 
 pub type SpinVector3DAligned4xf64 =  Vector3d4xf64;
@@ -205,6 +206,9 @@ pub fn spin_langevin_step<Fh, R, Fr>(
         for (om, m0, mf) in itertools::multizip((omega.iter(), spins_t0.iter(), spins_tf.iter_mut(),)){
             cross_exponential_vector3d(om, &mut phi);
             phi.mul_to(m0, mf);
+            let n_sq: Aligned4xf64 = mf.x*mf.x + mf.y*mf.y + mf.z*mf.z;
+            let n = n_sq.map(f64::sqrt);
+            *mf /= n;
         }
     };
 
@@ -327,8 +331,8 @@ pub fn spin_langevin_step<Fh, R, Fr>(
 #[cfg(test)]
 mod tests{
     use ndarray::{Array1, Array2};
-    use crate::util::simd::Aligned4xf64;
-    use crate::semi::langevin::{spin_langevin_dmdt, sl_add_dissipative, SpinArray3DAligned4x64,
+    use crate::util::simd_phys::vf64::{Aligned4xf64};
+    use crate::semi::langevin::{spin_langevin_step, sl_add_dissipative, SpinVector3DAligned4xf64,
                                 xyz_to_array_chunks};
     use num_traits::Zero;
 
