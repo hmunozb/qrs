@@ -85,15 +85,15 @@ fn sl_add_dissipative(
 }
 
 pub struct SpinLangevinWorkpad{
-    m0: Array2<SpinVector3DAligned4xf64>,
-    h0: Array2<SpinVector3DAligned4xf64>,
-    h1: Array2<SpinVector3DAligned4xf64>,
-    h2: Array2<SpinVector3DAligned4xf64>,
-    m1: Array2<SpinVector3DAligned4xf64>,
-    omega1: Array2<SpinVector3DAligned4xf64>,
-    omega2: Array2<SpinVector3DAligned4xf64>,
-    chi1: Array2<SpinVector3DAligned4xf64>,
-    chi2: Array2<SpinVector3DAligned4xf64>
+    pub m0: Array2<SpinVector3DAligned4xf64>,
+    pub h0: Array2<SpinVector3DAligned4xf64>,
+    pub h1: Array2<SpinVector3DAligned4xf64>,
+    pub h2: Array2<SpinVector3DAligned4xf64>,
+    pub m1: Array2<SpinVector3DAligned4xf64>,
+    pub omega1: Array2<SpinVector3DAligned4xf64>,
+    pub omega2: Array2<SpinVector3DAligned4xf64>,
+    pub chi1: Array2<SpinVector3DAligned4xf64>,
+    pub chi2: Array2<SpinVector3DAligned4xf64>
 
 }
 
