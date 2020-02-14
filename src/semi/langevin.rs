@@ -125,6 +125,8 @@ impl SpinLangevinWorkpad{
 ///         i.e. a total of (4*instances) x spins  3D Euclidean vectors
 /// haml_update: Function pdate the local fields due to the spins at time t. Should read/modify
 ///             an ArrayView1<SpinVector3DAligned4xf64>, where the array dimension is over spin indices
+///     NOTE: haml_update must write to all three cartesian components of each local field, even if
+///         a component is zero. The fields are not reset in any way before each iteration.
 /// eta : Dissipation strength
 /// b: stochastic noise strength  (Should be proportional to $ K_b T \eta$ for a temperature T. See note)
 /// rng: an RNG engine
