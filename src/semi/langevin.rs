@@ -267,17 +267,27 @@ pub fn spin_langevin_step<Fh, R, Fr>(
 
     // Generator updates
     let omega_11 = &mut work.omega1;
-    for (h0, h1, o1, chi1) in itertools::multizip((haml_10.iter(), haml_11.iter(), omega_11.iter_mut(), noise_1.iter())){
+    ndarray::Zip::from(haml_10.view()).and(haml_11.view()).and(omega_11.view_mut())
+            .and(noise_1.view())
+            .into_par_iter()
+    .for_each(|(h0, h1, o1, chi1)|{
         *o1 = (h0 + h1) * Aligned4xf64::from(delta_t / 4.0)
             + chi1 * (delta_t / 2.0).map(f64::sqrt);
-    }
+    });
+
     let omega_12 = &mut work.omega2;
-    for (h0, h1, h2, o2, chi1, chi2) in itertools::multizip(
-            (haml_10.iter(), haml_11.iter(), haml_12.iter(), omega_12.iter_mut(), noise_1.iter(), noise_2.iter()))
-    {
+    ndarray::Zip::from(haml_10.view()).and(haml_11.view()).and(haml_12.view()).and(omega_12.view_mut())
+            .and(noise_1.view()).and(noise_2.view()).into_par_iter()
+    .for_each(|(h0, h1, h2, o2, chi1, chi2)|{
         *o2 = (h0 + h1 * Aligned4xf64::from(4.0) + h2) * (delta_t / 6.0)
             + (chi1 + chi2) * (delta_t/2.0).map(f64::sqrt);
-    }
+    });
+//    for (h0, h1, h2, o2, chi1, chi2) in itertools::multizip(
+//            (haml_10.iter(), haml_11.iter(), haml_12.iter(), omega_12.iter_mut(), noise_1.iter(), noise_2.iter()))
+//    {
+//        *o2 = (h0 + h1 * Aligned4xf64::from(4.0) + h2) * (delta_t / 6.0)
+//            + (chi1 + chi2) * (delta_t/2.0).map(f64::sqrt);
+//    }
 
     let spins_t0 = m0;
     let spins_t = mf;
@@ -298,11 +308,19 @@ pub fn spin_langevin_step<Fh, R, Fr>(
 
     // Finally evaluate \Omega_2
     let omega2 = &mut work.omega2;
-    for (h0, h1, h2, o2, chi1, chi2) in itertools::multizip(
-            (haml_20.iter(), haml_21.iter(), haml_22.iter(), omega2.iter_mut(), noise_1.iter(), noise_2.iter())){
+
+    ndarray::Zip::from(haml_20.view()).and(haml_21.view()).and(haml_22.view()).and(omega2.view_mut())
+            .and(noise_1.view()).and(noise_2.view()).into_par_iter()
+    .for_each(|(h0, h1, h2, o2, chi1, chi2)|{
         *o2 = (h0 + h1 * Aligned4xf64::from(4.0) + h2) * (delta_t / 6.0)
             + (chi1 + chi2) * (delta_t/2.0).map(f64::sqrt);
-    }
+    });
+
+//    for (h0, h1, h2, o2, chi1, chi2) in itertools::multizip(
+//            (haml_20.iter(), haml_21.iter(), haml_22.iter(), omega2.iter_mut(), noise_1.iter(), noise_2.iter())){
+//        *o2 = (h0 + h1 * Aligned4xf64::from(4.0) + h2) * (delta_t / 6.0)
+//            + (chi1 + chi2) * (delta_t/2.0).map(f64::sqrt);
+//    }
 
     // Propagate m[0] to m[\delta_t]
     m_update(&*omega2, spins_t0, spins_t);
