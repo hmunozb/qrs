@@ -11,6 +11,7 @@ use simd_phys::r3::cross_exponential_vector3d;
 use crate::util::simd_phys::r3::{Matrix3d4xf64, Vector3d4xf64};
 use crate::util::simd_phys::vf64::Aligned4xf64;
 use rayon::prelude::*;
+use itertools::Itertools;
 
 //use simd_phys::aligned::Aligned4x64;
 
@@ -212,25 +213,29 @@ pub fn spin_langevin_step<Fh, R, Fr>(
     let m_update = |omega: &Array2<SpinVector3DAligned4xf64>, spins_t0: &Array2<SpinVector3DAligned4xf64>,
                             spins_tf: &mut Array2<SpinVector3DAligned4xf64>|
     {
-        ndarray::Zip::from(omega).and(spins_t0).and(spins_tf).par_apply(
-            |om, m0, mf|{
-                let mut phi : Matrix3d4xf64 = Zero::zero();
-                cross_exponential_vector3d(om, &mut phi);
-                phi.mul_to(m0, mf);
-                let n_sq: Aligned4xf64 = mf.x*mf.x + mf.y*mf.y + mf.z*mf.z;
-                let n = n_sq.map(f64::sqrt);
-                *mf /= n;
-            }
-        );
 
-//        let mut phi : Matrix3d4xf64 = Zero::zero();
-//        for (om, m0, mf) in itertools::multizip((omega.iter(), spins_t0.iter(), spins_tf.iter_mut(),)){
-//            cross_exponential_vector3d(om, &mut phi);
-//            phi.mul_to(m0, mf);
-//            let n_sq: Aligned4xf64 = mf.x*mf.x + mf.y*mf.y + mf.z*mf.z;
-//            let n = n_sq.map(f64::sqrt);
-//            *mf /= n;
-//        }
+//        ndarray::Zip::from(omega).and(spins_t0).and(spins_tf)
+//            .into_par_iter()
+//            //.with_min_len(4*h_shape.0)
+//            .for_each(
+//            |(om, m0, mf)|{
+//                let mut phi : Matrix3d4xf64 = Zero::zero();
+//                cross_exponential_vector3d(om, &mut phi);
+//                phi.mul_to(m0, mf);
+//                let n_sq: Aligned4xf64 = mf.x*mf.x + mf.y*mf.y + mf.z*mf.z;
+//                let n = n_sq.map(f64::sqrt);
+//                *mf /= n;
+//            }
+//        );
+
+        let mut phi : Matrix3d4xf64 = Zero::zero();
+        for (om, m0, mf) in itertools::multizip((omega.iter(), spins_t0.iter(), spins_tf.iter_mut(),)){
+            cross_exponential_vector3d(om, &mut phi);
+            phi.mul_to(m0, mf);
+            let n_sq: Aligned4xf64 = mf.x*mf.x + mf.y*mf.y + mf.z*mf.z;
+            let n = n_sq.map(f64::sqrt);
+            *mf /= n;
+        }
     };
 
     //let m0 = &work.m0;
