@@ -1,14 +1,17 @@
-use crate::util::simd_phys::vf64::{Aligned4xf64};
-use crate::util::simd_phys::r3::{Vector3d4xf64, Matrix3d4xf64};
-
-use ndarray::{Axis, Array2, ArrayView1, ArrayViewMut1, ArrayView2, ArrayView3};
+use itertools;
+use nalgebra::Vector3;
+use ndarray::{Array2, ArrayView1, ArrayView2, ArrayView3, ArrayViewMut1, Axis};
+use ndarray::parallel::prelude::*;
 //use nalgebra::{Vector3, Matrix3, Matrix};
 use num_traits::Zero;
 use rand::Rng;
-use itertools;
 //use simd_phys::aligned::Aligned4x64;
 use simd_phys::r3::cross_exponential_vector3d;
-use nalgebra::Vector3;
+
+use crate::util::simd_phys::r3::{Matrix3d4xf64, Vector3d4xf64};
+use crate::util::simd_phys::vf64::Aligned4xf64;
+use rayon::prelude::*;
+
 //use simd_phys::aligned::Aligned4x64;
 
 pub type SpinVector3DAligned4xf64 =  Vector3d4xf64;
@@ -170,7 +173,7 @@ pub fn spin_langevin_step<Fh, R, Fr>(
     haml_fn: Fh,
     rng: &mut R,
     rand_xi_f: Fr,
-) where Fh: Fn(f64, &ArrayView1<SpinVector3DAligned4xf64>, &mut ArrayViewMut1<SpinVector3DAligned4xf64>),
+) where Fh: Fn(f64, &ArrayView1<SpinVector3DAligned4xf64>, &mut ArrayViewMut1<SpinVector3DAligned4xf64>) + Sync,
         R: Rng + ?Sized,
         Fr: Fn(&mut R) -> SpinVector3DAligned4xf64
 {
@@ -193,25 +196,41 @@ pub fn spin_langevin_step<Fh, R, Fr>(
     }
     // Hamiltonian field update
     let h_update = |t: f64, h: &mut Array2<SpinVector3DAligned4xf64>, m: & Array2<SpinVector3DAligned4xf64> |{
-        for (mut h_row, m_row) in
-                h.axis_iter_mut(Axis(0)).zip(m.axis_iter(Axis(0)))
-        {
-            haml_fn(t, &m_row, &mut h_row);
-            sl_add_dissipative(&mut h_row, & m_row, eta);
-        }
+        h.axis_iter_mut(Axis(0)).into_par_iter().zip(m.axis_iter(Axis(0)).into_par_iter())
+            .for_each(|(mut h_row, m_row)|{
+                haml_fn(t, &m_row, &mut h_row);
+                sl_add_dissipative(&mut h_row, & m_row, eta);
+            });
+//        for (mut h_row, m_row) in
+//                h.axis_iter_mut(Axis(0)).zip(m.axis_iter(Axis(0)))
+//        {
+//            haml_fn(t, &m_row, &mut h_row);
+//            sl_add_dissipative(&mut h_row, & m_row, eta);
+//        }
     };
     // Spin propagation update
     let m_update = |omega: &Array2<SpinVector3DAligned4xf64>, spins_t0: &Array2<SpinVector3DAligned4xf64>,
                             spins_tf: &mut Array2<SpinVector3DAligned4xf64>|
     {
-        let mut phi : Matrix3d4xf64 = Zero::zero();
-        for (om, m0, mf) in itertools::multizip((omega.iter(), spins_t0.iter(), spins_tf.iter_mut(),)){
-            cross_exponential_vector3d(om, &mut phi);
-            phi.mul_to(m0, mf);
-            let n_sq: Aligned4xf64 = mf.x*mf.x + mf.y*mf.y + mf.z*mf.z;
-            let n = n_sq.map(f64::sqrt);
-            *mf /= n;
-        }
+        ndarray::Zip::from(omega).and(spins_t0).and(spins_tf).par_apply(
+            |om, m0, mf|{
+                let mut phi : Matrix3d4xf64 = Zero::zero();
+                cross_exponential_vector3d(om, &mut phi);
+                phi.mul_to(m0, mf);
+                let n_sq: Aligned4xf64 = mf.x*mf.x + mf.y*mf.y + mf.z*mf.z;
+                let n = n_sq.map(f64::sqrt);
+                *mf /= n;
+            }
+        );
+
+//        let mut phi : Matrix3d4xf64 = Zero::zero();
+//        for (om, m0, mf) in itertools::multizip((omega.iter(), spins_t0.iter(), spins_tf.iter_mut(),)){
+//            cross_exponential_vector3d(om, &mut phi);
+//            phi.mul_to(m0, mf);
+//            let n_sq: Aligned4xf64 = mf.x*mf.x + mf.y*mf.y + mf.z*mf.z;
+//            let n = n_sq.map(f64::sqrt);
+//            *mf /= n;
+//        }
     };
 
     //let m0 = &work.m0;
@@ -333,10 +352,11 @@ pub fn spin_langevin_step<Fh, R, Fr>(
 #[cfg(test)]
 mod tests{
     use ndarray::{Array1, Array2};
-    use crate::util::simd_phys::vf64::{Aligned4xf64};
-    use crate::semi::langevin::{spin_langevin_step, sl_add_dissipative, SpinVector3DAligned4xf64,
-                                xyz_to_array_chunks};
     use num_traits::Zero;
+
+    use crate::semi::langevin::{sl_add_dissipative, spin_langevin_step, SpinVector3DAligned4xf64,
+                                xyz_to_array_chunks};
+    use crate::util::simd_phys::vf64::Aligned4xf64;
 
     #[test]
     fn test_spin_langevin_dmdt(){
