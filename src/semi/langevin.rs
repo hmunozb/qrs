@@ -173,7 +173,7 @@ pub fn spin_langevin_step<Fh, R, Fr>(
     haml_fn: Fh,
     rng: &mut R,
     rand_xi_f: Fr,
-) where Fh: Fn(f64, &ArrayView1<SpinVector3DAligned4xf64>, &mut ArrayViewMut1<SpinVector3DAligned4xf64>) + Sync,
+) where Fh: Fn(f64, &ArrayView1<SpinVector3DAligned4xf64>, &mut ArrayViewMut1<SpinVector3DAligned4xf64>) ,
         R: Rng + ?Sized,
         Fr: Fn(&mut R) -> SpinVector3DAligned4xf64
 {
@@ -196,17 +196,17 @@ pub fn spin_langevin_step<Fh, R, Fr>(
     }
     // Hamiltonian field update
     let h_update = |t: f64, h: &mut Array2<SpinVector3DAligned4xf64>, m: & Array2<SpinVector3DAligned4xf64> |{
-        h.axis_iter_mut(Axis(0)).into_par_iter().zip(m.axis_iter(Axis(0)).into_par_iter())
-            .for_each(|(mut h_row, m_row)|{
-                haml_fn(t, &m_row, &mut h_row);
-                sl_add_dissipative(&mut h_row, & m_row, eta);
-            });
-//        for (mut h_row, m_row) in
-//                h.axis_iter_mut(Axis(0)).zip(m.axis_iter(Axis(0)))
-//        {
-//            haml_fn(t, &m_row, &mut h_row);
-//            sl_add_dissipative(&mut h_row, & m_row, eta);
-//        }
+//        h.axis_iter_mut(Axis(0)).into_par_iter().zip(m.axis_iter(Axis(0)).into_par_iter())
+//            .for_each(|(mut h_row, m_row)|{
+//                haml_fn(t, &m_row, &mut h_row);
+//                sl_add_dissipative(&mut h_row, & m_row, eta);
+//            });
+        for (mut h_row, m_row) in
+                h.axis_iter_mut(Axis(0)).zip(m.axis_iter(Axis(0)))
+        {
+            haml_fn(t, &m_row, &mut h_row);
+            sl_add_dissipative(&mut h_row, & m_row, eta);
+        }
     };
     // Spin propagation update
     let m_update = |omega: &Array2<SpinVector3DAligned4xf64>, spins_t0: &Array2<SpinVector3DAligned4xf64>,
