@@ -50,9 +50,9 @@ pub fn xyz_to_array_chunks(arr: ArrayView2<f64>,
 /// Evaluates v in the dynamical spin-langevin equation
 ///  dm/dt = v \cross m
 /// where
-///     v =  h + \chi (h \cross m) )
+///     v =  h - \chi (h \cross m) )
 /// Specifically, this function updates the hamiltonian field by adding the dissipative term
-///     h += \chi (h\cross m)
+///     h -= \chi (h\cross m)
 ///
 /// h: Hamiltonian local fields for each spin
 /// m: the 3D rotor spin
@@ -63,26 +63,13 @@ fn sl_add_dissipative(
     m_array: & ArrayView1<SpinVector3DAligned4xf64>,
     chi: f64
 ){
-//    let h_shape = h_array.raw_dim();
-//    let spins_shape = m_array.raw_dim();
-//    let dm_shape = v_array.raw_dim();
-//    if h_shape != spins_shape{
-//        panic!(format!("spin_langevin_dmdt: Dimension mismatch: h={:?} , m={:?} ", h_shape, spins_shape))
-//    }
-//
-//    if dm_shape != spins_shape{
-//        panic!(format!("spin_langevin_dmdt: Dimension mismatch: m={:?} , dm={:?} ", spins_shape, dm_shape))
-//    }
     let chi = Aligned4xf64::from(chi);
     for (m,h) in m_array.iter()
             .zip(h_array.iter_mut()){
         //let mut dh = SpinArray3DAligned4x64::default();
         //cross_product(&*h, m, &mut dh);
         let dh = h.cross(m);
-        *h += dh * chi;
-//        for (dhi,hi) in dh.iter().zip(h.iter_mut()){
-//            *hi +=  *dhi * chi;
-//        }
+        *h -= dh * chi;
     }
 }
 
