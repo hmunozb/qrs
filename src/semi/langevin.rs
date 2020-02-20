@@ -1,17 +1,15 @@
 use itertools;
+use itertools::Itertools;
 use nalgebra::Vector3;
 use ndarray::{Array2, ArrayView1, ArrayView2, ArrayView3, ArrayViewMut1, Axis};
 use ndarray::parallel::prelude::*;
-//use nalgebra::{Vector3, Matrix3, Matrix};
 use num_traits::Zero;
 use rand::Rng;
-//use simd_phys::aligned::Aligned4x64;
+use rayon::prelude::*;
 use simd_phys::r3::cross_exponential_vector3d;
 
 use crate::util::simd_phys::r3::{Matrix3d4xf64, Vector3d4xf64};
 use crate::util::simd_phys::vf64::Aligned4xf64;
-use rayon::prelude::*;
-use itertools::Itertools;
 
 //use simd_phys::aligned::Aligned4x64;
 
@@ -222,9 +220,9 @@ pub fn spin_langevin_step<Fh, R, Fr>(
                 let mut phi : Matrix3d4xf64 = Zero::zero();
                 cross_exponential_vector3d(om, &mut phi);
                 phi.mul_to(m0, mf);
-                let n_sq: Aligned4xf64 = mf.x*mf.x + mf.y*mf.y + mf.z*mf.z;
-                let n = n_sq.map(f64::sqrt);
-                *mf /= n;
+                //let n_sq: Aligned4xf64 = mf.x*mf.x + mf.y*mf.y + mf.z*mf.z;
+                //let n = n_sq.map(f64::sqrt);
+                //*mf /= n;
             }
         );
 
@@ -401,4 +399,5 @@ mod tests{
 
         sl_add_dissipative(&mut haml.view_mut(), & spins.view(), 0.1);
     }
+
 }
