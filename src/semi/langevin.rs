@@ -18,6 +18,11 @@ pub type SpinVector3DAligned4xf64 =  Vector3d4xf64;
 
 //static ZERO_SPIN_ARRAY_3D: SpinArray3DAligned4x64 = [Aligned4xf64{dat: [0.0, 0.0, 0.0, 0.0]}; 3];
 
+#[derive(Copy, Clone)]
+pub enum StepResult{
+    Accept(f64),
+    Reject(f64)
+}
 
 pub fn xyz_to_array_chunks(arr: ArrayView2<f64>,
                        mut chunk_array: ArrayViewMut1<SpinVector3DAligned4xf64>) {
@@ -50,9 +55,9 @@ pub fn xyz_to_array_chunks(arr: ArrayView2<f64>,
 /// Evaluates v in the dynamical spin-langevin equation
 ///  dm/dt = v \cross m
 /// where
-///     v =  h + \chi (h \cross m) )
+///     v =  h - \chi (h \cross m) )
 /// Specifically, this function updates the hamiltonian field by adding the dissipative term
-///     h += \chi (h\cross m)
+///     h -= \chi (h\cross m)
 ///
 /// h: Hamiltonian local fields for each spin
 /// m: the 3D rotor spin
@@ -66,7 +71,20 @@ fn sl_add_dissipative(
     let chi = Aligned4xf64::from(chi);
     for (m,h) in m_array.iter().zip(h_array.iter_mut()){
         let dh = h.cross(m);
-        *h += dh * chi;
+        *h -= dh * chi;
+    }
+}
+
+fn sl_dissipative(
+    h_array: & ArrayViewMut1<SpinVector3DAligned4xf64>,
+    v_array: &mut ArrayViewMut1<SpinVector3DAligned4xf64>,
+    m_array: & ArrayView1<SpinVector3DAligned4xf64>,
+    chi: f64
+){
+    let chi = Aligned4xf64::from(chi);
+    for ((m,h), v) in m_array.iter().zip(h_array.iter()).zip(v_array.iter_mut()){
+        let dh = h.cross(m);
+        *v = -dh * chi;
     }
 }
 
@@ -156,7 +174,8 @@ pub fn spin_langevin_step<Fh, R, Fr>(
     haml_fn: Fh,
     rng: &mut R,
     rand_xi_f: Fr,
-) where Fh: Fn(f64, &ArrayView1<SpinVector3DAligned4xf64>, &mut ArrayViewMut1<SpinVector3DAligned4xf64>) + Sync,
+) -> StepResult
+    where Fh: Fn(f64, &ArrayView1<SpinVector3DAligned4xf64>, &mut ArrayViewMut1<SpinVector3DAligned4xf64>) + Sync,
         R: Rng + ?Sized,
         Fr: Fn(&mut R) -> SpinVector3DAligned4xf64
 {
@@ -190,6 +209,13 @@ pub fn spin_langevin_step<Fh, R, Fr>(
 //            haml_fn(t, &m_row, &mut h_row);
 //            sl_add_dissipative(&mut h_row, & m_row, eta);
 //        }
+    };
+    let avg_field = |m: & Array2<SpinVector3DAligned4xf64>| -> f64{
+        let m_sum : f64 = m.iter().map(|v: &SpinVector3DAligned4xf64|
+                            (v[0]*v[0] + v[1]*v[1] + v[2]*v[2]).map(f64::sqrt).mean_reduce())
+                .sum() ;
+        m_sum / (m.len() as f64)
+
     };
     // Spin propagation update
     let m_update = |omega: &Array2<SpinVector3DAligned4xf64>, spins_t0: &Array2<SpinVector3DAligned4xf64>,
@@ -264,6 +290,14 @@ pub fn spin_langevin_step<Fh, R, Fr>(
         *o2 = (h0 + h1 * Aligned4xf64::from(4.0) + h2) * (delta_t / 6.0)
             + (chi1 + chi2) * (delta_t/2.0).map(f64::sqrt);
     });
+
+    // Check that the norm of the first stage is not too large
+    // Otherwise, dissipative term can cause numerical instability
+    let mean_o12 = avg_field(&*omega_12);
+    if mean_o12 >= 1.0 {
+        return StepResult::Reject(mean_o12);
+    }
+
 //    for (h0, h1, h2, o2, chi1, chi2) in itertools::multizip(
 //            (haml_10.iter(), haml_11.iter(), haml_12.iter(), omega_12.iter_mut(), noise_1.iter(), noise_2.iter()))
 //    {
@@ -306,6 +340,9 @@ pub fn spin_langevin_step<Fh, R, Fr>(
 
     // Propagate m[0] to m[\delta_t]
     m_update(&*omega2, spins_t0, spins_t);
+
+    let mean_o22 = avg_field(&*omega2);
+    return StepResult::Accept(mean_o22);
 
 }
 
