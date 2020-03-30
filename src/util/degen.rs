@@ -2,7 +2,7 @@ use nalgebra::{DMatrix, DVector};
 use alga::general::{ComplexField, RealField};
 use num_complex::Complex;
 use smallvec::SmallVec;
-use blas_traits::BlasScalar;
+use lapack_traits::LapackScalar;
 use lapacke::Layout;
 
 pub type DegenArray = Vec<SmallVec<[usize; 4]>>;
@@ -38,7 +38,7 @@ where S: ComplexField{
 }
 
 pub fn qr_ortho<S>(mut v: DMatrix<S>) -> DMatrix<S>
-where S: ComplexField+BlasScalar
+where S: ComplexField+LapackScalar
 {
     let sh = v.shape();
     if sh.0 != sh.1{
@@ -54,7 +54,7 @@ where S: ComplexField+BlasScalar
         panic!("Unexpected computation error - _geqrf returned {}", info);
     }
 
-    let info = S::orungqr(Layout::ColumnMajor, n, n, n, v.as_mut_slice(), n,
+    let info = S::ungqr(Layout::ColumnMajor, n, n, n, v.as_mut_slice(), n,
               tau.as_mut_slice());
 
     if info < 0{
@@ -75,7 +75,7 @@ where S: ComplexField+BlasScalar
 /// w_deg: (n x k) k orthogonal column vectors of dimension n
 /// w_rel: (n x k) relative orthogonal vectors to rotate w_deg onte as close as possible
 pub fn handle_degeneracies_qr<S>(w_deg: &DMatrix<S>, w_rel: &DMatrix<S>) -> DMatrix<S>
-where S: ComplexField+BlasScalar
+where S: ComplexField+LapackScalar
 {
     let v = w_deg.ad_mul(w_rel);  // k x k w_rel onto w_deg overlap
     let q = qr_ortho(v);  // reorthogonalize in w_deg subspace
@@ -90,7 +90,7 @@ where S: ComplexField+BlasScalar
 /// In adiabatic simulation, such a basis minimizes the variation in the diabatic perturbations
 /// of each time step.
 pub fn handle_degeneracies_relative<S>(degens: &DegenArray, w_deg: &mut DMatrix<S>, w_rel: &DMatrix<S>)
-    where S: ComplexField+BlasScalar
+    where S: ComplexField+LapackScalar
 {
     for di in degens{
         let i0 = di[0];
@@ -106,7 +106,7 @@ pub fn handle_degeneracies_relative<S>(degens: &DegenArray, w_deg: &mut DMatrix<
 
 pub fn handle_degeneracies_relative_vals<R>(vals: &DVector<R>, w_deg: &mut DMatrix<Complex<R>>,
                                             w_rel: &DMatrix<Complex<R>>, rtol: Option<R>)
-        where R: RealField, Complex<R>: ComplexField+BlasScalar{
+        where R: RealField, Complex<R>: ComplexField+LapackScalar{
     let degens = degeneracy_detect(vals, rtol);
     handle_degeneracies_relative(&degens, w_deg, w_rel);
 }
@@ -148,7 +148,7 @@ pub fn degeneracy_detect<R: RealField>(vals: &DVector<R>, rtol: Option<R>) -> De
 
 ///Handle degeneracies in the standard basis
 pub fn handle_degeneracies<R: RealField>(degens: &DegenArray, vecs: &mut DMatrix<Complex<R>>)
-where R: RealField, Complex<R>: ComplexField+BlasScalar
+where R: RealField, Complex<R>: ComplexField+LapackScalar
 {
 
     for di in degens{
@@ -180,7 +180,7 @@ where R: RealField, Complex<R>: ComplexField+BlasScalar
 /// Handle the phases of a matrix by naively setting the largest element to be a
 /// positive real number.
 pub fn handle_phases<R>(vecs: &mut DMatrix<Complex<R>>)
-where R: RealField, Complex<R>: ComplexField+BlasScalar
+where R: RealField, Complex<R>: ComplexField+LapackScalar
 {
     for mut col in vecs.column_iter_mut(){
         let (i,j) = col.icamax_full();
@@ -217,7 +217,7 @@ pub fn handle_relative_phases<R:RealField>(vecs: &mut DMatrix<Complex<R>>,
 }
 
 pub fn handle_degeneracies_vals<R>(vals: &DVector<R>, vecs: &mut DMatrix<Complex<R>>, rtol: Option<R>)
-where R: RealField, Complex<R>: ComplexField+BlasScalar
+where R: RealField, Complex<R>: ComplexField+LapackScalar
 {
     let degens = degeneracy_detect(&vals, rtol);
 

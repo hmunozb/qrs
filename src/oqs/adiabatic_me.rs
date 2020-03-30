@@ -6,7 +6,7 @@ use crate::oqs::bath::Bath;
 use crate::ode::super_op::{KineticExpSplit, CoherentExpSplit, DenMatExpiSplit};
 use crate::ode::super_op::{MaybeScalePowExp};
 use alga::general::{ComplexField, RealField};
-use blas_traits::BlasScalar;
+use lapack_traits::LapackScalar;
 use log::{info, error, warn, trace};
 use num_traits::{Zero, Float};
 use num_complex::Complex;
@@ -44,7 +44,7 @@ type AdiabaticMEExpSplit<T> = SemiComplexO4ExpSplit<T, Complex<T>, Op<T>,
 type AdiabaticMEL<T> = <AdiabaticMEExpSplit<T> as ExponentialSplit<T, Complex<T>, Op<T>>>::L;
 
 fn make_ame_split<T: RealField + Float>(n: u32) -> AdiabaticMEExpSplit<T>
-where Complex<T> : BlasScalar + ComplexField<RealField=T>
+where Complex<T> : LapackScalar + ComplexField<RealField=T>
 {
     let split = AdiabaticMEExpSplit::<T>::new(
         AMEHamiltonianSplit::new(

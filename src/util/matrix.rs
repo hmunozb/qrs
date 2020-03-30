@@ -5,7 +5,7 @@ use itertools::Itertools;
 use alga::general::{ComplexField, RealField};
 use num_complex::Complex;
 use cblas::{Transpose, Layout};
-use blas_traits::BlasScalar;
+use lapack_traits::LapackScalar;
 
 /// Computes
 /// out[i, j] = f( a[i], b[j] )
@@ -43,7 +43,7 @@ where N:Scalar+RealField, R: Dim, C: Dim, S1: Storage<N, R, C>, S2: StorageMut<C
     }
 }
 
-pub fn gemm<N: Scalar + BlasScalar>(
+pub fn gemm<N: Scalar + LapackScalar>(
         c: &mut DMatrix<N>, a: &DMatrix<N>, b: &DMatrix<N>, a_t: Transpose, b_t: Transpose ){
     let a_sh = a.shape();
     let b_sh = b.shape();
@@ -60,7 +60,7 @@ pub fn gemm<N: Scalar + BlasScalar>(
             b_sh.0 as i32, N::zero(), c.as_mut_slice(), c_sh.0 as i32);
 }
 
-pub fn ad_mul_to<N: Scalar + BlasScalar>(
+pub fn ad_mul_to<N: Scalar + LapackScalar>(
     a: &DMatrix<N>, b: &DMatrix<N>, c: &mut DMatrix<N>
 ){
     gemm(c, a, b, Transpose::Conjugate, Transpose::None);
@@ -68,7 +68,7 @@ pub fn ad_mul_to<N: Scalar + BlasScalar>(
 
 #[allow(non_snake_case)]
 /// Z <- U^dag A U
-pub fn change_basis_to<N: Scalar+BlasScalar>(
+pub fn change_basis_to<N: Scalar+LapackScalar>(
         A: &DMatrix<N>,
         U: &DMatrix<N>,
         _temp: &mut DMatrix<N>,
@@ -82,7 +82,7 @@ pub fn change_basis_to<N: Scalar+BlasScalar>(
 
 #[allow(non_snake_case)]
 /// Performs U^dag A U
-pub fn change_basis<N: Scalar+BlasScalar>(
+pub fn change_basis<N: Scalar+LapackScalar>(
     A: &DMatrix<N>,
     U: &DMatrix<N>) -> DMatrix<N>{
     let a_sh = A.shape();
@@ -98,7 +98,7 @@ pub fn change_basis<N: Scalar+BlasScalar>(
 
 #[allow(non_snake_case)]
 /// Performs U A U^dag where A is Hermitian
-pub fn unchange_basis<N: Scalar+BlasScalar>(
+pub fn unchange_basis<N: Scalar+LapackScalar>(
     A: &DMatrix<N>,
     U: &DMatrix<N>) -> DMatrix<N>{
     let a_sh = A.shape();

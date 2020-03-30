@@ -1,6 +1,6 @@
 use alga::general::{RealField, ComplexField, SupersetOf};
 use lapacke::Layout;
-use blas_traits::Tsyheevx;
+use lapack_traits::Theevx;
 use nalgebra::{DMatrix, DVector};
 use num_traits::{Zero, One};
 
@@ -54,7 +54,7 @@ struct EigWork<N: ComplexField>{
     ifail: Vec<i32>
 }
 
-impl<N: Tsyheevx> EigWork<N>{
+impl<N: Theevx> EigWork<N>{
     fn new() -> Self{
         EigWork{work: Vec::new(), rwork: Vec::new(), iwork: Vec::new(), ifail: Vec::new()}
     }
@@ -89,7 +89,7 @@ pub struct EigResolver<N: ComplexField>{
     eigvecs: DMatrix<N>
 }
 
-impl<N: Tsyheevx> EigResolver<N>
+impl<N: Theevx> EigResolver<N>
 {
     pub fn new(n: u32, jobz: EigJob, range: EigRangeData<N::RealField>,
                read_upper: bool) -> Self{
@@ -176,7 +176,7 @@ impl<N: Tsyheevx> EigResolver<N>
         let ifail = workpad.ifail.as_mut_slice();
 
         let mut m = 0;
-        let info = N::syheevx(Layout::ColumnMajor,
+        let info = N::heevx(Layout::ColumnMajor,
                                 er.jobz.val(),
                                er.range.range, er.uplo, n, a_slice, n,
                                er.range.vl.clone(), er.range.vu.clone(),
