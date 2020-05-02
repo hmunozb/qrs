@@ -176,16 +176,18 @@ impl<N: Theevx> EigResolver<N>
         let ifail = workpad.ifail.as_mut_slice();
 
         let mut m = 0;
-        let info = N::heevx(Layout::ColumnMajor,
-                                er.jobz.val(),
-                               er.range.range, er.uplo, n, a_slice, n,
-                               er.range.vl.clone(), er.range.vu.clone(),
-                               // Different convention for il,iu:
-                               // Fortran arrays start at 1, and the range is inclusive
-                               er.range.il + 1, er.range.iu,
-                               -N::RealField::one(), &mut m,
-                               w, z, n, work, lwork, rwork, iwork, ifail
-        );
+        let info = unsafe {
+            N::heevx(Layout::ColumnMajor,
+                     er.jobz.val(),
+                     er.range.range, er.uplo, n, a_slice, n,
+                     er.range.vl.clone(), er.range.vu.clone(),
+                     // Different convention for il,iu:
+                     // Fortran arrays start at 1, and the range is inclusive
+                     er.range.il + 1, er.range.iu,
+                     -N::RealField::one(), &mut m,
+                     w, z, n, work, lwork, rwork, iwork, ifail,
+            )
+        };
         if info < 0{
             panic!("Illegal argument error - _syevx/_heevx returned {}", info);
         } else if info > 0{

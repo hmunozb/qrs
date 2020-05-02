@@ -18,14 +18,14 @@ use vec_ode::exp::split_exp::{SemiComplexO4ExpSplit, //StrangSplit,
                               RKNR4ExpSplit};
 use vec_ode::exp::{DirectSumL, ExponentialSplit};
 use ndarray::{ ArrayView2};
-use vec_ode::{ODEState, ODEStep, ODESolver, ODESolverBase, ODEError, LinearCombination};
+use vec_ode::{ODEState, ODEStep, ODESolver, ODESolverBase, ODEError, LinearCombinationSpace};
 use vec_ode::exp::cfm::ExpCFMSolver;
 use vec_ode::AdaptiveODESolver;
 use crate::util::degen::{handle_degeneracies, degeneracy_detect,
                          handle_relative_phases, handle_degeneracies_relative,
                          handle_degeneracies_relative_vals};
 use crate::util::diff::four_point_gl;
-use crate::ComplexScalar;
+use crate::{ComplexScalar, RealScalar};
 //use alga::linear::NormedSpace;
 
 static AME_DIS_KINETIC_SCALE_LIM : f64 = 5.0e-1;
@@ -43,8 +43,8 @@ type AdiabaticMEExpSplit<T> = SemiComplexO4ExpSplit<T, Complex<T>, Op<T>,
 
 type AdiabaticMEL<T> = <AdiabaticMEExpSplit<T> as ExponentialSplit<T, Complex<T>, Op<T>>>::L;
 
-fn make_ame_split<T: RealField + Float>(n: u32) -> AdiabaticMEExpSplit<T>
-where Complex<T> : LapackScalar + ComplexField<RealField=T>
+fn make_ame_split<T: RealScalar>(n: u32) -> AdiabaticMEExpSplit<T>
+where Complex<T> : ComplexScalar<T>
 {
     let split = AdiabaticMEExpSplit::<T>::new(
         AMEHamiltonianSplit::new(

@@ -7,6 +7,7 @@ use nalgebra::{Dim};
 use nalgebra::base::storage::{StorageMut};
 use std::marker::PhantomData;
 use crate::ComplexScalar;
+use vec_ode::LinearCombination;
 
 pub type Ket<N> = DVector<Complex<N>>;
 pub type Bra<N> = DVector<Complex<N>>;
@@ -15,6 +16,10 @@ pub type Op<N> =  DMatrix<Complex<N>>;
 pub struct DenseQRep<N>
 where N: ComplexField
 { _phantom: PhantomData<N> }
+
+pub struct LC<R> where R: RealField{
+    _phantom: PhantomData<R>
+}
 
 impl<R: RealField, > QRep<Complex<R>> for DenseQRep<R>
 where Complex<R>: ComplexScalar<R>
@@ -133,6 +138,31 @@ for Ket<N>{
 
     fn tensor_ref(a: &Self, b: & Ket<N>)-> Self::Result{
         a.kronecker(&b)
+    }
+}
+
+impl<N, R, C, S> LinearCombination<Complex<N>, Matrix<Complex<N>, R, C, S>> for LC<N>
+    where N: RealField,
+          R: Dim, C: Dim, S: StorageMut<Complex<N>, R, C>
+{
+    fn scale(v: &mut Matrix<Complex<N>, R, C, S>, k: Complex<N>) {
+        *v *= k;
+    }
+
+    fn scalar_multiply_to(v: &Matrix<Complex<N>, R, C, S>, k: Complex<N>, target: &mut Matrix<Complex<N>, R, C, S>) {
+        target.zip_apply(v, |_t, vi| vi * k);
+    }
+
+    fn add_scalar_mul(v: &mut Matrix<Complex<N>, R, C, S>, k: Complex<N>, other: &Matrix<Complex<N>, R, C, S>) {
+        v.zip_apply(other, move |y, x| y + (k * x));
+    }
+
+    fn add_assign_ref(v: &mut Matrix<Complex<N>, R, C, S>, other: &Matrix<Complex<N>, R, C, S>) {
+        *v += other;
+    }
+
+    fn delta(v: &mut Matrix<Complex<N>, R, C, S>, y: &Matrix<Complex<N>, R, C, S>) {
+        *v -= y;
     }
 }
 

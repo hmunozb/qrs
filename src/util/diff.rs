@@ -1,7 +1,7 @@
 use alga::general::ComplexField;
 use nalgebra::{DMatrix};
 use smallvec::SmallVec;
-use vec_ode::LinearCombination;
+use vec_ode::LinearCombinationSpace;
 
 static GL_D_STENC_1 : [f64; 4] =[
     -2.7320508075688772935, 1.7320508075688772935,

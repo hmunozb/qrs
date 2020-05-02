@@ -35,6 +35,7 @@ impl<T: RealField+Float> ExponentialSplit<T, Complex<T>, Ket<T>> for DenseExpiSp
 where Complex<T> : LapackScalar + ComplexField<RealField=T>
 {
     type L = Op<T>;
+    type LC = LC<T>;
     type U = (Ket<T>, Op<T>);
 
     fn lin_zero(&self) -> Self::L {

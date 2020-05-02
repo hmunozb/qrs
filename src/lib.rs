@@ -8,7 +8,10 @@ extern crate log;
 
 use alga::general::{RealField, ComplexField};
 use lapack_traits::LapackScalar;
+use num_traits::Float;
 
+pub trait RealScalar : RealField + vec_ode::RealField + Float{ }
+impl<T> RealScalar for T where T: RealField + vec_ode::RealField + Float{ }
 
 pub trait ComplexScalar<R: RealField> :
     ComplexField<RealField=R> + LapackScalar {}
