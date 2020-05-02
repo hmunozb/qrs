@@ -2,7 +2,7 @@ use nalgebra::{Matrix,Vector,DMatrix};
 use nalgebra::{Scalar, Dim, U1};
 use nalgebra::base::storage::{ContiguousStorage, ContiguousStorageMut, Storage, StorageMut};
 use itertools::Itertools;
-use alga::general::{ComplexField, RealField};
+use crate::{ComplexField, RealField};
 use num_complex::Complex;
 use cblas::{Transpose, Layout};
 use lapack_traits::LapackScalar;
@@ -54,10 +54,12 @@ pub fn gemm<N: Scalar + LapackScalar>(
     assert!(at_sh.0 == c_sh.0, format!("Shape mismatch: A = {:?}, C = {:?}", at_sh, c_sh));
     assert!(bt_sh.1 == c_sh.1, format!("Shape mismatch: B = {:?}, C = {:?}", bt_sh, c_sh));
 
-    N::gemm(Layout::ColumnMajor, a_t, b_t,
-            at_sh.0 as i32, bt_sh.1 as i32,
-    at_sh.1 as i32, N::one(), a.as_slice(),  a_sh.0 as i32,  b.as_slice(),
-            b_sh.0 as i32, N::zero(), c.as_mut_slice(), c_sh.0 as i32);
+    unsafe {
+        N::gemm(Layout::ColumnMajor, a_t, b_t,
+                at_sh.0 as i32, bt_sh.1 as i32,
+                at_sh.1 as i32, N::one(), a.as_slice(), a_sh.0 as i32, b.as_slice(),
+                b_sh.0 as i32, N::zero(), c.as_mut_slice(), c_sh.0 as i32)
+    };
 }
 
 pub fn ad_mul_to<N: Scalar + LapackScalar>(

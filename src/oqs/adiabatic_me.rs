@@ -1,11 +1,11 @@
 use crate::util::*;
-use crate::base::quantum::{QRep};
-use crate::base::dense::*;
+use qrs_core::reps::matrix::*;
+use qrs_core::quantum::{QRep, QObj};
 use crate::oqs::bath::Bath;
 //use crate::ode::dense::DenseExpiSplit;
 use crate::ode::super_op::{KineticExpSplit, CoherentExpSplit, DenMatExpiSplit};
 use crate::ode::super_op::{MaybeScalePowExp};
-use alga::general::{ComplexField, RealField};
+use qrs_core::{ComplexField, RealScalar};
 use lapack_traits::LapackScalar;
 use log::{info, error, warn, trace};
 use num_traits::{Zero, Float};
@@ -18,7 +18,7 @@ use vec_ode::exp::split_exp::{SemiComplexO4ExpSplit, //StrangSplit,
                               RKNR4ExpSplit};
 use vec_ode::exp::{DirectSumL, ExponentialSplit};
 use ndarray::{ ArrayView2};
-use vec_ode::{ODEState, ODEStep, ODESolver, ODESolverBase, ODEError, LinearCombination};
+use vec_ode::{ODEState, ODEStep, ODESolver, ODESolverBase, ODEError, LinearCombination, LinearCombinationSpace};
 use vec_ode::exp::cfm::ExpCFMSolver;
 use vec_ode::AdaptiveODESolver;
 use crate::util::degen::{handle_degeneracies, degeneracy_detect,
@@ -31,20 +31,20 @@ use crate::ComplexScalar;
 static AME_DIS_KINETIC_SCALE_LIM : f64 = 5.0e-1;
 static AME_HAML_COHERENT_SCALE_LIM : f64 = 1.0e9;
 
-type AMEDissipatorSplit<T> = CommutativeExpSplit<T, Complex<T>, Op<T>,
+type AMEDissipatorSplit<T> = CommutativeExpSplit<T, Complex<T>, Op<Complex<T>>,
                                 MaybeScalePowExp<T, KineticExpSplit<T>>,
                                 CoherentExpSplit>;
-type AMEHamiltonianSplit<T> = RKNR4ExpSplit<T, Complex<T>, Op<T>,
+type AMEHamiltonianSplit<T> = RKNR4ExpSplit<T, Complex<T>, Op<Complex<T>>,
                                 CoherentExpSplit,
                                 DenMatExpiSplit<T>>;
-type AdiabaticMEExpSplit<T> = SemiComplexO4ExpSplit<T, Complex<T>, Op<T>,
+type AdiabaticMEExpSplit<T> = SemiComplexO4ExpSplit<T, Complex<T>, Op<Complex<T>>,
                                 AMEHamiltonianSplit<T>,
                                 AMEDissipatorSplit<T>>;
 
-type AdiabaticMEL<T> = <AdiabaticMEExpSplit<T> as ExponentialSplit<T, Complex<T>, Op<T>>>::L;
+type AdiabaticMEL<T> = <AdiabaticMEExpSplit<T> as ExponentialSplit<T, Complex<T>, Op<Complex<T>>>>::L;
 
-fn make_ame_split<T: RealField + Float>(n: u32) -> AdiabaticMEExpSplit<T>
-where Complex<T> : LapackScalar + ComplexField<RealField=T>
+fn make_ame_split<T: RealScalar + Float>(n: u32) -> AdiabaticMEExpSplit<T>
+where Complex<T> : ComplexScalar<R=T>
 {
     let split = AdiabaticMEExpSplit::<T>::new(
         AMEHamiltonianSplit::new(
@@ -61,7 +61,7 @@ where Complex<T> : LapackScalar + ComplexField<RealField=T>
     split
 }
 
-struct AMEWorkpad<R: RealField>{
+struct AMEWorkpad<R: RealScalar>{
     omega: DMatrix<R>,
     gamma: DMatrix<R>,
     linds_ab: Vec<DMatrix<Complex<R>>>,
@@ -73,7 +73,7 @@ struct AMEWorkpad<R: RealField>{
     ztemp0: DMatrix<Complex<R>>
 }
 
-impl<R: RealField> AMEWorkpad<R>{
+impl<R: RealScalar> AMEWorkpad<R>{
 
     fn new(n: usize, k: usize) -> Self{
         let mut linds_ab =  Vec::new();
@@ -111,7 +111,7 @@ impl<R: RealField> AMEWorkpad<R>{
 ///
 ///     This does not include the diabatic contribution, which must be computed by
 ///     finite difference on the eigenvectors
-fn ame_liouvillian<R: RealField, B: Bath<R>>(
+fn ame_liouvillian<R: RealScalar, B: Bath<R>>(
     bath: & B,
     work: &mut AMEWorkpad<R>,
     vals: &DVector<R>,
@@ -121,7 +121,7 @@ fn ame_liouvillian<R: RealField, B: Bath<R>>(
     lind_coh: &mut DMatrix<Complex<R>>,
     lindblad_ops: &Vec<DMatrix<Complex<R>>>
 )
-where Complex<R> : ComplexScalar<R>
+where Complex<R> : ComplexScalar<R=R>
 {
     assert_eq!(lindblad_ops.len(), work.linds_ab.len(), "Number of lindblad operators mismatched");
     let one_half = R::from_subset(&(0.5_f64));
@@ -132,7 +132,8 @@ where Complex<R> : ComplexScalar<R>
     outer_zip_to(vals, vals, &mut work.omega, |a, b| *a - *b);
     copy_transmute_to(& work.omega, haml);
     //H[a,b] = - i omega[a,b]
-    DenseQRep::qscal(-Complex::i(), haml);
+    haml.qscal(-Complex::i());
+    //DenseQRep::qscal(-Complex::i(), haml);
 
     //               If no Lindblad Operators, we are done
     if lindblad_ops.len() == 0{
@@ -250,7 +251,7 @@ where Complex<R> : ComplexScalar<R>
 
 
 fn assert_orthogonal<T>(v:& DMatrix<Complex<T>>)
-where T: RealField
+where T: RealScalar
 {
     let vad = v.adjoint();
     let vv : DMatrix<Complex<T>> = vad * v;
@@ -260,14 +261,14 @@ where T: RealField
 
 pub struct AMEResults{
     pub t: Vec<f64>,
-    pub rho: Vec<Op<f64>>,
+    pub rho: Vec<Op<c64>>,
     pub partitions: Vec<u32>,
-    pub eigvecs: Vec<Op<f64>>,
+    pub eigvecs: Vec<Op<c64>>,
     pub observables: Vec<Vec<c64>>
 }
 
 impl AMEResults{
-    pub fn change_rho_basis(&self, new_bases: Vec<Op<f64>>) -> Vec<Op<f64>>{
+    pub fn change_rho_basis(&self, new_bases: Vec<Op<c64>>) -> Vec<Op<c64>>{
         let mut new_rhos = Vec::new();
         for ((rho, &p), basis) in self.rho.iter().zip(self.partitions.iter())
                                     .zip(self.eigvecs.iter()){
@@ -281,28 +282,28 @@ impl AMEResults{
 
 pub struct AME<'a, B: Bath<f64>>{
     haml: &'a TimePartHaml<'a, f64>,
-    lindblad_ops: &'a Vec<Op<f64>>,
-    p_lindblad_ops: Vec<Op<f64>>,
+    lindblad_ops: &'a Vec<Op<c64>>,
+    p_lindblad_ops: Vec<Op<c64>>,
     work: AMEWorkpad<f64>,
-    adiab_haml: Op<f64>,
-    diab_k: Op<f64>,
-    lind_pauli: Op<f64>,
-    lind_coh: Op<f64>,
-    eigvecs: Op<f64>,
+    adiab_haml: Op<c64>,
+    diab_k: Op<c64>,
+    lind_pauli: Op<c64>,
+    lind_coh: Op<c64>,
+    eigvecs: Op<c64>,
     eigvals: DVector<f64>,
     bath: &'a B,
     prev_t: Option<(f64,f64)>,
-    prev_eigvecs: (Op<f64>, Op<f64>)
+    prev_eigvecs: (Op<c64>, Op<c64>)
 }
 
 impl<'a, B: Bath<f64>> AME<'a, B> {
 //    pub fn from_operators(haml_mat: TimeDepMatrix<'a, Complex<f64>>,
-//                          lindblad_ops: &'a Vec<Op<f64>>){
+//                          lindblad_ops: &'a Vec<Op<c64>>){
 //        let haml = TimePartHaml::new(TimeDepMatrix,)
 //    }
 
     pub fn new(haml: &'a TimePartHaml<'a, f64>,
-               lindblad_ops: &'a Vec<Op<f64>>,
+               lindblad_ops: &'a Vec<Op<c64>>,
                bath: &'a B) -> Self{
         let n = haml.basis_size() as usize;
         let k = lindblad_ops.len();
@@ -371,7 +372,7 @@ impl<'a, B: Bath<f64>> AME<'a, B> {
 
     /// Loads the eigenvalues and eigenvectors of time t
     /// with degeneracy handling
-    fn load_eigv_degen_handle(&mut self, t: f64, p: usize, v0: &Op<f64>){
+    fn load_eigv_degen_handle(&mut self, t: f64, p: usize, v0: &Op<c64>){
         let (vals, vecs) =
             self.haml.eig_p(t, Some(p ));
         self.eigvecs = vecs;
@@ -385,7 +386,7 @@ impl<'a, B: Bath<f64>> AME<'a, B> {
         }
 
     }
-    pub fn last_eigvecs(&self) ->  &Op<f64>{
+    pub fn last_eigvecs(&self) ->  &Op<c64>{
         &self.prev_eigvecs.1
     }
 
@@ -539,7 +540,7 @@ impl<'a, B: Bath<f64>> AME<'a, B> {
 //        assert_relative_eq!(vf0.norm(), 1.0);
 
         let delta_t = tf - t0;
-        let mut eigvecs : SmallVec<[Op<f64>; 4]> = SmallVec::new();
+        let mut eigvecs : SmallVec<[Op<c64>; 4]> = SmallVec::new();
         let mut dsl_vec = Vec::new();
         let mut haml_vec = Vec::new();
         let mut l_vec: Vec<AdiabaticMEL<f64>> = Vec::new();
@@ -598,7 +599,7 @@ impl<'a, B: Bath<f64>> AME<'a, B> {
 //
 ////            if i > 0 { // handle degeneracies and phases to be consistent with the first eigenbasis
 ////                let degens = degeneracy_detect(&self.eigvals, None);
-////                let ref_eigvecs: &Op<f64> = &(l_vec[0].a.b);
+////                let ref_eigvecs: &Op<c64> = &(l_vec[0].a.b);
 ////                let mut w = ref_eigvecs.ad_mul(&self.eigvecs);
 ////                if degens.len() > 0{
 ////                    warn!("\
@@ -630,7 +631,7 @@ impl<'a, B: Bath<f64>> AME<'a, B> {
 
 pub fn solve_ame<B: Bath<f64>>(
     ame: &mut AME<B>,
-    initial_state: Op<f64>,
+    initial_state: Op<c64>,
     tol: f64,
     dt_max_frac: f64
 )
@@ -642,9 +643,9 @@ pub fn solve_ame<B: Bath<f64>>(
     let mut norm_est = condest::Normest1::new(n, 2);
     let mut rho0 = initial_state;
     let mut last_delta_t : Option<f64> = None;
-    //let mut last_eigs : Op<f64> = Op::<f64>::zeros(n,n);
-    let mut rho_vec: Vec<Op<f64>> = Vec::new();
-    let mut eigvecs: Vec<Op<f64>> = Vec::new();
+    //let mut last_eigs : Op<c64> = Op::<f64>::zeros(n,n);
+    let mut rho_vec: Vec<Op<c64>> = Vec::new();
+    let mut eigvecs: Vec<Op<c64>> = Vec::new();
     let mut results_parts = Vec::new();
 
 
@@ -671,7 +672,7 @@ pub fn solve_ame<B: Bath<f64>>(
         let f = |t_arr: &[f64], (t0, tf) : (f64, f64)| {
                 ame.generate_split(t_arr, (t0,tf),p)
             };
-        let norm_fn = |m: &Op<f64>| -> f64{
+        let norm_fn = |m: &Op<c64>| -> f64{
             //should technically be transposed to row major but denmats are hermitian
             //let absm = m.map(|c|c.abs());
                 //absm.row_sum().amax()/ ( (n as f64).sqrt())
@@ -773,8 +774,8 @@ mod tests{
     use num_complex::Complex;
     use super::*;
     use crate::base::quantum::QRep;
-    use crate::base::dense::*;
-    use crate::base::pauli::dense as pauli;
+    use qrs_core::reps::dense::*;
+    use crate::base::pauli::matrix as pauli;
     use crate::oqs::bath::OhmicBath;
     use crate::ode::super_op::DenMatExpiSplit;
     use crate::util::{TimeDepMatrixTerm, TimeDepMatrix, TimePartHaml};

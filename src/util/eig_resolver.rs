@@ -1,7 +1,7 @@
 use alga::general::{RealField, ComplexField, SupersetOf};
 use lapacke::Layout;
 use lapack_traits::Theevx;
-use nalgebra::{DMatrix, DVector};
+use ndarray::prelude::*;
 use num_traits::{Zero, One};
 
 #[derive(Copy,Clone)]
@@ -82,11 +82,11 @@ impl<N: Theevx> EigWork<N>{
 pub struct EigResolver<N: ComplexField>{
     jobz: EigJob,
     range: EigRangeData<N::RealField>,
-    a: DMatrix<N>,
+    a: Array2<N>,
     uplo: u8,
     eigwork: EigWork<N>,
-    eigvals: DVector<N::RealField>,
-    eigvecs: DMatrix<N>
+    eigvals: Array1<N::RealField>,
+    eigvecs: Array2<N>
 }
 
 impl<N: Theevx> EigResolver<N>
@@ -97,18 +97,16 @@ impl<N: Theevx> EigResolver<N>
         let num_eigvecs = if range.range == b'I'
         { (range.iu - range.il)  as usize} else { un };
 
-        let a = DMatrix::zeros(un, un);
-        let eigvals = DVector::zeros(un);
-        let eigvecs = DMatrix::zeros(un, num_eigvecs);
+        let a = Array2::zeros((un, un));
+        let eigvals = Array1::zeros(un);
+        let eigvecs = Array2::zeros((un, num_eigvecs));
         let mut eigwork = EigWork::new();
         eigwork.set_work_sizes(1, n);
-        let uplo;
-
-        if read_upper {
-            uplo = b'U';  //Upper Fortran <-> Lower C
+        let uplo= if read_upper {
+            b'U'  //Upper Fortran <-> Lower C
         } else {
-            uplo = b'L';  //Lower Fortran <-> Upper C
-        }
+            b'L'  //Lower Fortran <-> Upper C
+        };
 
         let mut me = Self{jobz, range, a, uplo, eigwork, eigvals, eigvecs};
         //Perform a workspace length query
@@ -131,7 +129,7 @@ impl<N: Theevx> EigResolver<N>
 
     /// Hands a mutable reference to the internal matrix
     /// The matrix should not be assumed to contain any definite values once eig() is called
-    pub fn borrow_matrix(&mut self) -> &mut DMatrix<N> {
+    pub fn borrow_matrix(&mut self) -> &mut Array2<N> {
         &mut self.a
     }
 
@@ -142,30 +140,30 @@ impl<N: Theevx> EigResolver<N>
 
     }
 
-    pub fn vals(&self) -> &DVector<N::RealField>{
+    pub fn vals(&self) -> &Array1<N::RealField>{
         & self.eigvals
     }
 
     /// Returns a reference to the eigenvector matrix
     /// Each column of the matrix is an eigenvector ordered according to the corresponding eigenvalue
     /// If a (il, iu) range is specify, the number of rows of this matrix is iu - il
-    pub fn vecs(&self) -> &DMatrix<N>{
+    pub fn vecs(&self) -> &Array2<N>{
         & self.eigvecs
     }
 
     /// Finds the eigenvalues and eigenvectors of the held matrix
     /// and releases the results
-    pub fn into_eigs(mut self) -> (DVector<N::RealField>, DMatrix<N>){
+    pub fn into_eigs(mut self) -> (Array1<N::RealField>, Array2<N>){
         self.eig();
         (self.eigvals, self.eigvecs)
     }
 
     fn call_syhe_evx( er: &mut Self, query: bool){
         let n= er.a.nrows() as i32;
-        let a_slice = er.a.as_mut_slice();
+        let a_slice = er.a.as_slice_mut().unwrap();
 
-        let w = er.eigvals.as_mut_slice();
-        let z = er.eigvecs.as_mut_slice();
+        let w = er.eigvals.as_slice_mut().unwrap();
+        let z = er.eigvecs.as_slice_mut().unwrap();
 
         let workpad = &mut er.eigwork;
 
@@ -176,15 +174,15 @@ impl<N: Theevx> EigResolver<N>
         let ifail = workpad.ifail.as_mut_slice();
 
         let mut m = 0;
-        let info = N::heevx(Layout::ColumnMajor,
-                                er.jobz.val(),
-                               er.range.range, er.uplo, n, a_slice, n,
-                               er.range.vl.clone(), er.range.vu.clone(),
-                               // Different convention for il,iu:
-                               // Fortran arrays start at 1, and the range is inclusive
-                               er.range.il + 1, er.range.iu,
-                               -N::RealField::one(), &mut m,
-                               w, z, n, work, lwork, rwork, iwork, ifail
+        let info = N::heevx(Layout::RowMajor,
+                            er.jobz.val(),
+                            er.range.range, er.uplo, n, a_slice, n,
+                            er.range.vl.clone(), er.range.vu.clone(),
+                            // Different convention for il,iu:
+                            // Fortran arrays start at 1, and the range is inclusive
+                            er.range.il + 1, er.range.iu,
+                            -N::RealField::one(), &mut m,
+                            w, z, n, work, lwork, rwork, iwork, ifail
         );
         if info < 0{
             panic!("Illegal argument error - _syevx/_heevx returned {}", info);

@@ -1,5 +1,6 @@
 //use interpolation::{lerp,Lerp};
-use alga::general::{RealField};
+use crate::{RealField};
+use num_traits::real::Real;
 
 pub enum InterpBounds<N: RealField>{
     Ends,

@@ -1,6 +1,9 @@
+use crate::base::quantum::{QObj, QRep};
+use crate::{ComplexScalar};
+use qrs_core::{ComplexField,RealField, RealScalar};
 use std::borrow::Cow;
-use alga::general::{ComplexField, };
 use nalgebra::DMatrix;
+use std::marker::PhantomData;
 
 
 pub trait TimeDependentOperatorTermObj{
@@ -11,8 +14,19 @@ pub trait TimeDependentOperatorTermObj{
 }
 
 #[derive(Clone)]
-pub struct TimeDependentOperator<T: TimeDependentOperatorTermObj>{
-    pub terms: Vec<T>
+pub struct TimeDependentOperatorTerm<
+    'a, R: RealField, N: ComplexScalar,
+    Q: QRep<N>, T: QObj<N, Rep=Q>>
+{
+    pub op: Cow<'a, T>,
+    pub f: Box<&'a dyn Fn(R)->N>,
+    _phantom: PhantomData<Q>
+}
+
+#[derive(Clone)]
+pub struct TimeDependentOperator<'a, R: RealField, N: ComplexScalar,
+    Q: QRep<N>, T: QObj<N, Rep=Q>>{
+    pub terms: Vec<TimeDependentOperatorTerm<'a, R, N, Q, T>>,
 }
 
 //pub struct TimeDepOperatorTerm<N, NFn>{
@@ -38,6 +52,32 @@ pub struct TimeDepMatrix<'a, N: ComplexField> {
 impl<'a, N: ComplexField> TimeDepMatrix<'a, N>{
     pub fn new(terms: Vec<TimeDepMatrixTerm<'a, N>>) -> Self{
         Self{terms}
+    }
+}
+
+impl<'a, R: RealField, N: ComplexScalar, Q: QRep<N>, T: QObj<N, Rep=Q>>
+TimeDependentOperatorTerm<'a, R, N, Q, T>
+    where N: ComplexField{
+    pub fn new(q: &'a T, f: &'a dyn Fn(R) -> N) -> Self{
+        Self{op: Cow::Borrowed(q), f: Box::new(f), _phantom: Default::default() }
+    }
+    pub fn new_with_owned(q: T, f: &'a dyn Fn(R) -> N) -> Self{
+        Self{op: Cow::Owned(q), f: Box::new(f), _phantom: Default::default() }
+    }
+
+    pub fn shape(&self) -> T::Dims{
+        self.op.qdim()
+        //return self.mat.shape()
+    }
+
+    pub fn add_to(& self, to_op: &mut T, t: R) {
+        let ft = (self.f)(t);
+        to_op.qaxpy(ft, &self.op);
+    }
+
+    pub fn eval_to(& self, to_op: &mut T, t: R){
+        let ft = (self.f)(t);
+        to_op.qaxby(ft, &self.op, N::zero());
     }
 }
 
@@ -106,8 +146,42 @@ impl<'a, N> TimeDepMatrix<'a, N>
 
         m
     }
+}
 
+impl<'a, R: RealScalar, N: ComplexScalar<R=R>, Q: QRep<N>, T: QObj<N, Rep=Q>>
+TimeDependentOperator<'a, R, N, Q, T>
+{
+    pub fn eval(&self, t: N::R) -> T{
+        let mut op : T  = (*self.terms.first().unwrap().op).clone();
+        self.eval_to(&mut op, t);
+        op
+    }
 
+    pub fn shape(&self) -> T::Dims{
+        self.terms[0].shape()
+    }
+
+    pub fn eval_to(&self, to_op: &mut T, t: R){
+        let (first, rest) = self.terms.split_at(1);
+        first.get(0).unwrap().eval_to(to_op, t);
+        for term in rest.iter(){
+            term.add_to(to_op, t);
+        }
+    }
+
+    pub fn map<Fun>(&self, mut f: Fun) -> Self
+        where Fun: FnMut(&T) -> T
+    {
+        let mut m = Self{terms: Vec::new()};
+        for term in self.terms.iter(){
+            m.terms.push(TimeDependentOperatorTerm{
+                op: Cow::Owned(f(&&term.op)),
+                f: term.f.clone(),
+                _phantom: Default::default() })
+        }
+
+        m
+    }
 }
 
 mod tests{

@@ -1,6 +1,6 @@
-use alga::general::{ ClosedMul, ClosedAdd};
+use crate::{ClosedMul, ClosedAdd};
 //use num_traits::{Zero, One};
-use std::ops::{Add, Mul, AddAssign, DerefMut};
+use std::ops::{Add, Mul, AddAssign, DerefMut, MulAssign};
 use std::boxed::Box;
 use std::marker::PhantomData;
 use std::mem;
@@ -112,16 +112,17 @@ impl<S: Sized, T: Sized> DynLinearCombination<S, T>{
 }
 
 /// Generic, dynamically allocated vector space structure
-pub enum DynVectorSpace<S: Sized, T: Sized>{
+#[derive(Clone, Debug)]
+pub enum DynVectorSpace<S: Clone, T: Copy>{
     Zero,
     Element(S),
-
     Add(Box<DynVectorSpace<S, T>>, Box<DynVectorSpace<S, T>>),
+    Sum(Vec<DynVectorSpace<S, T>>),
     Scale(Box<DynVectorSpace<S, T>>, T)
 }
 
 impl<S, T>  DynVectorSpace<S, T>
-    where S: Sized,T: Sized
+    where S: Clone, T: Copy
 {
     pub fn evaluate<F, A>(self, f: &F, zero: &A) -> A
         where F: Fn(S) -> A,
@@ -132,21 +133,66 @@ impl<S, T>  DynVectorSpace<S, T>
             DynVectorSpace::Element(s) => f(s),
             DynVectorSpace::Add(a1, a2) =>
                 a1.evaluate(f, zero) + a2.evaluate(f, zero),
+            DynVectorSpace::Sum(v) =>
+                v.into_iter().map(|a| a.evaluate(f, zero))
+                    .fold(zero.clone(), |a, b| a + b),
             DynVectorSpace::Scale(a, t) =>
                 a.evaluate(f, zero) * t
         }
     }
 
-    pub fn linear_map<F, S2>(self, f: &F) -> DynVectorSpace<S2, T>
-        where F: Fn(S) -> S2, S2: Sized
+    pub fn evaluate_ref<F, G, A, T2>(&self, f: &F, g:& G, zero: &A) -> A
+        where F: Fn(&S) -> A,
+              G: Fn(&T) -> T2,
+              A: Add<Output=A>+Mul<T2, Output=A> + Clone,
+              T2: Copy
+    {
+        match self{
+            DynVectorSpace::Zero => zero.clone(),
+            DynVectorSpace::Element(s) => f(s),
+            DynVectorSpace::Add(a1, a2) =>
+                a1.evaluate_ref(f, g, zero) + a2.evaluate_ref(f, g,zero),
+            DynVectorSpace::Sum(v) =>
+                v.into_iter().map(|a| a.evaluate_ref(f, g, zero))
+                    .fold(zero.clone(), |a, b| a + b),
+            DynVectorSpace::Scale(a, t) =>
+                a.evaluate_ref(f,g,zero) * g(t)
+        }
+    }
+
+    pub fn linear_map_ref<F, G, S2>(&self, f: &F, g: &G) -> DynVectorSpace<S2, T>
+        where F: Fn(&S) -> S2,
+              G: Fn(&T) -> T,
+              S2: Clone
     {
         match self{
             DynVectorSpace::Zero => DynVectorSpace::Zero,
             DynVectorSpace::Element(s) => DynVectorSpace::Element(f(s)),
             DynVectorSpace::Add(a1, a2) =>
-                DynVectorSpace::Add(Box::from(a1.linear_map(f)), Box::from(a2.linear_map(f))),
+                DynVectorSpace::Add(Box::from(a1.linear_map_ref(f, g)), Box::from(a2.linear_map_ref(f, g))),
+            DynVectorSpace::Sum(v) =>
+                DynVectorSpace::Sum(v.iter().map(|a| a.linear_map_ref(f, g)).collect())
+                ,
             DynVectorSpace::Scale(a, t) =>
-               DynVectorSpace::Scale( Box::from(a.linear_map(f)), t)
+               DynVectorSpace::Scale(Box::from(a.linear_map_ref(f, g)), g(t))
+        }
+    }
+
+    pub fn linear_map<F, G, S2>(self, f: &F, g: &G) -> DynVectorSpace<S2, T>
+        where F: Fn(S) -> S2,
+              G: Fn(T) -> T,
+              S2: Clone
+    {
+        match self{
+            DynVectorSpace::Zero => DynVectorSpace::Zero,
+            DynVectorSpace::Element(s) => DynVectorSpace::Element(f(s)),
+            DynVectorSpace::Add(a1, a2) =>
+                DynVectorSpace::Add(Box::from(a1.linear_map(f, g)), Box::from(a2.linear_map(f, g))),
+            DynVectorSpace::Sum(v) =>
+                DynVectorSpace::Sum(v.into_iter().map(|a| a.linear_map(f, g)).collect())
+            ,
+            DynVectorSpace::Scale(a, t) =>
+                DynVectorSpace::Scale(Box::from(a.linear_map(f, g)), g(t))
         }
     }
 
@@ -157,6 +203,10 @@ impl<S, T>  DynVectorSpace<S, T>
             DynVectorSpace::Element(s) => f(s),
             DynVectorSpace::Add(a1, a2) =>
                 { a1.linear_apply(f); a2.linear_apply(f);}
+            DynVectorSpace::Sum(v) =>
+                for a in v.iter_mut(){
+                    a.linear_apply(f);
+                },
             DynVectorSpace::Scale(a, _t) =>
                 { a.linear_apply(f);}
             _ => ()
@@ -189,7 +239,7 @@ impl<S, T>  DynVectorSpace<S, T>
 //    }
 }
 impl<S, T>  DynVectorSpace<S, T>
-    where S: Sized+DynVectorSpaceZero+PartialEq,T: Sized + Mul + Zero
+    where S: Clone+DynVectorSpaceZero+PartialEq,T: Copy + Mul + Zero
 {
     pub fn simplify(self) -> Self
     {
@@ -213,6 +263,9 @@ impl<S, T>  DynVectorSpace<S, T>
                     let a2 = a2.simplify();
                     DynVectorSpace::Add(Box::from(a1), Box::from(a2))
                 }
+            }
+            DynVectorSpace::Sum(v) =>{
+                DynVectorSpace::Sum(v.into_iter().map(|a|a.simplify()).collect())
             }
             DynVectorSpace::Scale(mut a, t) =>{
                 if t.is_zero(){
@@ -240,7 +293,11 @@ impl<S, T>  DynVectorSpace<S, T>
                     }
                     DynVectorSpace::Add(a, b) => {
                         let d = DynVectorSpace::Add(a, b);
-                        d.simplify()
+                        DynVectorSpace::Scale(Box::from(d.simplify()), t)
+                    }
+                    DynVectorSpace::Sum(v) =>{
+                        let d = DynVectorSpace::Sum(v.into_iter().map(|a|a.simplify()).collect());
+                        DynVectorSpace::Scale(Box::from(d), t)
                     }
                 }
 //                if let DynVectorSpace::Scale(b, t2) = d {
@@ -260,7 +317,7 @@ impl<S, T>  DynVectorSpace<S, T>
     }
 }
 
-impl<S:Sized, T:Sized> Zero for DynVectorSpace<S, T>{
+impl<S: Clone, T: Copy> Zero for DynVectorSpace<S, T>{
     fn zero() -> Self {
         DynVectorSpace::Zero
     }
@@ -274,13 +331,13 @@ impl<S:Sized, T:Sized> Zero for DynVectorSpace<S, T>{
     }
 }
 
-impl<S:Sized, T:Sized> Default for DynVectorSpace<S, T>{
+impl<S: Clone, T: Copy> Default for DynVectorSpace<S, T>{
     fn default() -> Self {
         Zero::zero()
     }
 }
 
-impl<S:Sized, T:Sized> Add
+impl<S: Clone, T: Copy> Add
 for DynVectorSpace<S, T>{
     type Output = Self;
     fn add(self, rhs: Self) -> Self::Output{
@@ -288,7 +345,15 @@ for DynVectorSpace<S, T>{
     }
 }
 
-impl<S:Sized, T:Sized> AddAssign
+impl<S: Clone, T: Copy> Add<&DynVectorSpace<S, T>>
+for DynVectorSpace<S, T>{
+    type Output = Self;
+    fn add(self, rhs: &DynVectorSpace<S, T>) -> Self::Output{
+        DynVectorSpace::Add(Box::from(self), Box::from((*rhs).clone()))
+    }
+}
+
+impl<S: Clone, T: Copy> AddAssign
 for DynVectorSpace<S, T>{
     fn add_assign(&mut self, rhs: Self) {
         let mut lhs_box = Box::from(DynVectorSpace::Zero);
@@ -297,7 +362,17 @@ for DynVectorSpace<S, T>{
     }
 }
 
-impl<S:Sized, T:Sized> Mul<T>
+
+impl<S: Clone, T: Copy> AddAssign<&DynVectorSpace<S, T>>
+for DynVectorSpace<S, T>{
+    fn add_assign(&mut self, rhs: &DynVectorSpace<S, T>) {
+        let mut lhs_box = Box::from(DynVectorSpace::Zero);
+        mem::swap(self, &mut lhs_box);
+        *self = DynVectorSpace::Add(lhs_box, Box::from((*rhs).clone()))
+    }
+}
+
+impl<S: Clone, T: Copy> Mul<T>
 for DynVectorSpace<S, T>{
     type Output = Self;
     fn mul(self, rhs: T) -> Self::Output{
@@ -305,38 +380,49 @@ for DynVectorSpace<S, T>{
     }
 }
 
+impl<S: Clone, T: Copy> MulAssign<T>
+for DynVectorSpace<S, T>{
+    fn mul_assign(&mut self, rhs: T) {
+        let mut lhs_box = Box::from(DynVectorSpace::Zero);
+        mem::swap(self, &mut lhs_box);
+        *self = DynVectorSpace::Scale(lhs_box, rhs);
+    }
+}
 
+pub enum DynFreeAlgebraMonomial<S: Sized>{
+    Unity,
+    Prod(Vec<S>)
+}
 
-// Symbolic Enum for dynamically representing an algebra generated by a module S
-pub enum DynFreeAlgebra<S:Sized , T: Sized>{
+/// Symbolic Enum for dynamically representing an algebra generated by a module S
+#[derive(Clone, Debug)]
+pub enum DynFreeAlgebra<S: Clone, T: Copy>{
     Zero,
     Unity,
     Element(S),
-    Sum(Box<DynFreeAlgebra<S, T>>, Box<DynFreeAlgebra<S, T>>),
+    Add(Box<DynFreeAlgebra<S, T>>, Box<DynFreeAlgebra<S, T>>),
     Prod(Box<DynFreeAlgebra<S, T>>, Box<DynFreeAlgebra<S, T>>),
     Scale(Box<DynFreeAlgebra<S, T>>, T)
 }
 
 /// Allocate an empty instance of the enum and swap its contents with self,
-fn push_dfa_out<S:Sized, T:Sized>(
+fn push_dfa_out<S: Clone, T: Copy>(
          a: &mut DynFreeAlgebra<S, T>) -> Box<DynFreeAlgebra<S, T>>{
     let mut lhs_box = Box::from(DynFreeAlgebra::Zero);
     mem::swap(a, lhs_box.borrow_mut());
     lhs_box
 }
 
-impl<S, T> DynFreeAlgebra<S, T>
-where S: Sized,
-
+impl<S: Clone, T: Copy> DynFreeAlgebra<S, T>
 {
-    fn evaluate<F, A>(self, f: &F, zero: &A, one:&A) -> A
+    pub fn evaluate<F, A>(self, f: &F, zero: &A, one:&A) -> A
     where F: Fn(S) -> A,
           A: Add<Output=A>+Mul<Output=A>+Mul<T, Output=A> + Clone{
         match self{
             DynFreeAlgebra::Zero => zero.clone(),
             DynFreeAlgebra::Unity => one.clone(),
             DynFreeAlgebra::Element(s) => f(s),
-            DynFreeAlgebra::Sum(a1, a2) =>
+            DynFreeAlgebra::Add(a1, a2) =>
                 a1.evaluate(f, zero, one) + a2.evaluate(f, zero, one),
             DynFreeAlgebra::Prod(a1, a2) =>
                 a1.evaluate(f,zero,one) * a2.evaluate(f, zero, one),
@@ -344,7 +430,78 @@ where S: Sized,
                 a.evaluate(f, zero, one) * t
         }
     }
+
+    pub fn evaluate_ref<F, G, A, T2>(&self, f: &F, g: &G,
+                                     zero: &A, one:&A) -> A
+        where F: Fn(&S) -> A,
+              G: Fn(&T) -> T2,
+              A: Add<Output=A> + Mul<Output=A> + Mul<T2, Output=A> + Clone{
+        match self{
+            DynFreeAlgebra::Zero => zero.clone(),
+            DynFreeAlgebra::Unity => one.clone(),
+            DynFreeAlgebra::Element(s) => f(s),
+            DynFreeAlgebra::Add(a1, a2) =>
+                a1.evaluate_ref(f, g, zero, one) + a2.evaluate_ref(f, g, zero, one),
+            DynFreeAlgebra::Prod(a1, a2) =>
+                a1.evaluate_ref(f, g, zero,one) * a2.evaluate_ref(f, g, zero, one),
+            DynFreeAlgebra::Scale(a, t) =>
+                a.evaluate_ref(f, g, zero, one) * g(t)
+        }
+    }
 }
+
+impl<S: Clone, T: Copy> Add
+for DynFreeAlgebra<S, T>{
+    type Output = Self;
+    fn add(self, rhs: Self) -> Self::Output{
+        DynFreeAlgebra::Add(Box::from(self), Box::from(rhs))
+    }
+}
+
+impl<S: Clone, T: Copy> Add<&DynFreeAlgebra<S, T>>
+for DynFreeAlgebra<S, T>{
+    type Output = Self;
+    fn add(self, rhs: &DynFreeAlgebra<S, T>) -> Self::Output{
+        DynFreeAlgebra::Add(Box::from(self), Box::from((*rhs).clone()))
+    }
+}
+
+impl<S: Clone, T: Copy> AddAssign
+for DynFreeAlgebra<S, T>{
+    fn add_assign(&mut self, rhs: Self) {
+        let mut lhs_box = Box::from(DynFreeAlgebra::Zero);
+        mem::swap(self, &mut lhs_box);
+        *self = DynFreeAlgebra::Add(lhs_box, Box::from(rhs))
+    }
+}
+
+
+impl<S: Clone, T: Copy> AddAssign<&DynFreeAlgebra<S, T>>
+for DynFreeAlgebra<S, T>{
+    fn add_assign(&mut self, rhs: &DynFreeAlgebra<S, T>) {
+        let mut lhs_box = Box::from(DynFreeAlgebra::Zero);
+        mem::swap(self, &mut lhs_box);
+        *self = DynFreeAlgebra::Add(lhs_box, Box::from((*rhs).clone()))
+    }
+}
+
+impl<S: Clone, T: Copy> Mul<T>
+for DynFreeAlgebra<S, T>{
+    type Output = Self;
+    fn mul(self, rhs: T) -> Self::Output{
+        DynFreeAlgebra::Scale(Box::from(self), rhs)
+    }
+}
+
+impl<S: Clone, T: Copy> MulAssign<T>
+for DynFreeAlgebra<S, T>{
+    fn mul_assign(&mut self, rhs: T) {
+        let mut lhs_box = Box::from(DynFreeAlgebra::Zero);
+        mem::swap(self, &mut lhs_box);
+        *self = DynFreeAlgebra::Scale(lhs_box, rhs);
+    }
+}
+
 
 //
 //impl<S:Ring+Module+ClosedMul<T>, T: RingCommutative> FreeExpression<S> for DynFreeAlgebra<S, T>{
@@ -365,21 +522,21 @@ where S: Sized,
 
 
 
-impl<S:Sized, T:Sized> Add
-for DynFreeAlgebra<S, T>{
-    type Output = Self;
-    fn add(self, rhs: Self) -> Self::Output{
-        DynFreeAlgebra::Sum(Box::from(self), Box::from(rhs))
-    }
-}
+// impl<S: Clone, T: Copy> Add
+// for DynFreeAlgebra<S, T>{
+//     type Output = Self;
+//     fn add(self, rhs: Self) -> Self::Output{
+//         DynFreeAlgebra::Add(Box::from(self), Box::from(rhs))
+//     }
+// }
 
-impl<S:Sized, T:Sized> AddAssign
-for DynFreeAlgebra<S, T>{
-    fn add_assign(&mut self, rhs: Self) {
-        let lhs_box = push_dfa_out(self);
-        *self = DynFreeAlgebra::Sum(lhs_box, Box::from(rhs))
-    }
-}
+// impl<S: Clone, T: Copy> AddAssign
+// for DynFreeAlgebra<S, T>{
+//     fn add_assign(&mut self, rhs: Self) {
+//         let lhs_box = push_dfa_out(self);
+//         *self = DynFreeAlgebra::Add(lhs_box, Box::from(rhs))
+//     }
+// }
 
 
 struct StaticFreeExpressionAtom<S>{

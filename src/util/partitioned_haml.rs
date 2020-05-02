@@ -1,19 +1,28 @@
 use std::iter::FromIterator;
 
-use alga::general::{ RealField};
 //use blas_traits::{BlasScalar, Tsyheevx};
-use num_traits::{One, Zero};
+use num_traits::{One, Zero, ToPrimitive};
 use num_complex::Complex;
 use nalgebra::{DMatrix, DVector, U1, Dynamic};
 use itertools_num::linspace;
 use log::{info, warn, trace};
-use crate::base::dense::{Op};
 use crate::util::time_dep_op::TimeDepMatrix;
 use num_traits::Float;
-use crate::util::{EigJob, EigRangeData, EigResolver, change_basis};
+use qrs_core::quantum::eig::{EigJob, EigQRep};
+//use qrs_core::util::array::{change_basis};
+use crate::util::change_basis;
+use crate::util::{EigRangeData, EigResolver, TimeDependentOperator};
 //use crate::util::degen::{handle_degeneracies_vals, handle_phases, degeneracy_detect, handle_degeneracies};
-use crate::ComplexScalar;
+use crate::{ComplexScalar, RealScalar};
+//use qrs_core::reps::dense::{DenseQRep, Op};
+use qrs_core::quantum::eig::QEiger;
+use qrs_core::reps::matrix::{DenseQRep, Op};
+use ndarray::Array1;
 
+// pub type TimeDepQOp<'a, R: RealScalar> = TimeDependentOperator<'a, R, Complex<R>,
+//     DenseQRep<Complex<R>>, Op<Complex<R>> >;
+
+pub type TimeDepQOp<'a, R: RealScalar> = TimeDepMatrix<'a, Complex<R>>;
 
 pub struct TimePartitionOptions {
     pub nudge_final_partition: bool
@@ -21,34 +30,34 @@ pub struct TimePartitionOptions {
 
 /// This struct implements a Time-Partitioned Hamiltonian
 ///
-pub struct TimePartHaml<'a, R: RealField>
-    where Complex<R>: ComplexScalar<R>
+pub struct TimePartHaml<'a, R: RealScalar>
+    where Complex<R>: ComplexScalar<R=R>
     //where Complex<R>: ComplexField<RealField=R> //+ BlasScalar
 {
     basis_size: u32,
     time_range: (R, R),
     time_partitions: Vec<R>,
     partition_midpoints: Vec<R>,
-    basis_sequence: Vec<Op<R>>,
-    projector_sequence: Vec<Op<R>>,
-    haml: TimeDepMatrix<'a, Complex<R>>,
-    haml_sequence: Vec<TimeDepMatrix<'a, Complex<R>>>,
+    basis_sequence: Vec<Op<Complex<R>>>,
+    projector_sequence: Vec<Op<Complex<R>>>,
+    haml: TimeDepQOp<'a, R>,
+    haml_sequence: Vec<TimeDepQOp<'a, R>>,
 }
 
 impl<'a, R> TimePartHaml<'a, R>
-where R: RealField + Float,  Complex<R>: ComplexScalar<R>
+where R: RealScalar + Float,  Complex<R>: ComplexScalar<R=R>
       //Complex<R>: ComplexField<RealField=R> //+ Tsyheevx
 //where Complex<R> : ComplexScalar<R>
 //where R: RealField
     //where Complex<R>: ComplexField //<RealField=R> //+ BlasScalar
 {
-    pub fn new(haml: TimeDepMatrix<'a, Complex<R>>, basis_size: u32, t0: R, tf: R, num_partitions: usize) -> Self {
+    pub fn new(haml: TimeDepQOp<'a, R>, basis_size: u32, t0: R, tf: R, num_partitions: usize) -> Self {
         let time_partitions = Vec::from_iter(
             linspace(t0, tf, num_partitions + 1));
         Self::new_with_partitions(haml, basis_size, time_partitions)
     }
 
-    pub fn new_with_partitions(haml: TimeDepMatrix<'a, Complex<R>>, basis_size: u32,
+    pub fn new_with_partitions(haml: TimeDepQOp<'a, R>, basis_size: u32,
                                time_partitions: Vec<R>) -> Self {
         if time_partitions.len() == 0 {
             panic!("TimePartitionedHamiltonian time_partitions must be non-empty.");
@@ -99,13 +108,15 @@ where R: RealField + Float,  Complex<R>: ComplexScalar<R>
         let n = self.haml.shape().0;
         let mut eiger: EigResolver<Complex<R>> = EigResolver::new_eiger(
             n as u32, EigJob::ValsVecs,
-            EigRangeData::num_range(0, self.basis_size as i32));
+                  EigRangeData::idx_range(0, self.basis_size as i32));
 
-        for t in self.partition_midpoints.iter() {
-            let ht = eiger.borrow_matrix();
-            self.haml.eval_to(ht, *t);
-            eiger.eig();
-            let vecs = eiger.vecs().clone();
+        for &t in self.partition_midpoints.iter() {
+            let (_vals, vecs) = QEiger::<Complex<R>, DenseQRep<Complex<R>>>::eigh(&mut eiger,
+                                                                                  &self.haml.eval(t));
+            // let ht = eiger.borrow_matrix();
+            // self.haml.eval_to(ht, *t);
+            // eiger.eig();
+            //let vecs = eiger.vecs().clone();
 //            let vals = eiger.vals().as_slice().get(0..self.basis_size as usize).unwrap();
 //            let vals = DVector::from_column_slice(vals);
 //            let degens = degeneracy_detect(&vals, None);
@@ -160,12 +171,15 @@ where R: RealField + Float,  Complex<R>: ComplexScalar<R>
         let id0: DMatrix<Complex<R>> = DMatrix::from_diagonal(&id_diagonal);
         let mut eiger: EigResolver<Complex<R>> = EigResolver::new_eiger(
             n as u32, EigJob::ValsVecs,
-            EigRangeData::num_range(0, self.basis_size as i32));
+            EigRangeData::idx_range(0, self.basis_size as i32));
 
-        let mut get_eigs = |t: &R| {
-            self.haml.eval_to(eiger.borrow_matrix(), t.clone());
-            eiger.eig();
-            eiger.vecs().clone()
+        let mut get_eigs = |t: &R| -> Op<Complex<R>>{
+            let ht = self.haml.eval(*t);
+            let (_vals, vecs) = QEiger::<Complex<R>, DenseQRep<Complex<R>>>::eigh(&mut eiger,&ht);
+            //self.haml.eval_to(eiger.borrow_matrix(), t.clone());
+            //eiger.eig();
+            //eiger.vecs().clone()
+            vecs
         };
 
         // Initial Conditions for the first partition
@@ -182,7 +196,7 @@ where R: RealField + Float,  Complex<R>: ComplexScalar<R>
             let projector = (vecs_init.ad_mul(&vecs_mid)) * (vecs_mid.ad_mul(&vecs_end));
             let id1 = change_basis(&id0, &projector);
 
-            let trace_loss = 1.0 - (id1.trace() as Complex<R>).re.to_subset().unwrap()/(strength as f64);
+            let trace_loss = 1.0 - (id1.trace() as Complex<R>).re.to_f64().unwrap()/(strength as f64);
             new_time_intervals.push(t0.clone());
             trace!("Partition {}/{} trace loss: {}",i+1, num_partitions, trace_loss);
             if trace_loss > tol {
@@ -224,16 +238,21 @@ where R: RealField + Float,  Complex<R>: ComplexScalar<R>
     pub fn basis_size(&self) -> u32{
         return self.basis_size;
     }
-    pub fn eig_p(&self, t: R, p : Option<usize>) -> (DVector<R>, DMatrix<Complex<R>>){
+    pub fn eig_p(&self, t: R, p : Option<usize>) -> (DVector<R>, Op<Complex<R>>){
         let part = match p {
             None => match self.partition_of(t.clone())
                 { None => panic!("The time {} is not within range", t), Some(tp) => tp },
             Some(part) => part
         };
-        let mut eiger = self.p_eiger();
-        self.haml_sequence[part].eval_to(eiger.borrow_matrix(), t);
+        //let mut eiger = self.p_eiger();
 
-        let (vals, vecs) = eiger.into_eigs();
+        let ht= self.haml_sequence[part].eval(t);
+        let (vals, vecs) = DenseQRep::eig(&ht);
+        //let (vals, vecs) = EigResolver::<Complex<R>>::eigh(,&ht);
+        let vals : DVector<R> = DVector::from_vec(vals);
+        //self.haml_sequence[part].eval_to(eiger.borrow_matrix(), t);
+
+        //let (vals, vecs) = eiger.into_eigs();
 
 //        if handle_degens{
 //            handle_degeneracies_vals(&vals, &mut vecs, None);
@@ -245,18 +264,18 @@ where R: RealField + Float,  Complex<R>: ComplexScalar<R>
         (vals, vecs)
     }
 
-    pub fn canonical_basis_amplitudes(&self, i: usize, p: usize)
-            -> nalgebra::MatrixSliceMN<Complex<R>, U1, Dynamic, U1, Dynamic> {
-        let row = self.basis_sequence[p].row(i);
-        row
-    }
+    // pub fn canonical_basis_amplitudes(&self, i: usize, p: usize)
+    //         -> nalgebra::MatrixSliceMN<Complex<R>, U1, Dynamic, U1, Dynamic> {
+    //     let row = self.basis_sequence[p].row(i);
+    //     row
+    // }
 
-    pub fn sparse_canonical_basis_projs(&self, cb: &[usize]) -> Vec<Op<R>>{
+    pub fn sparse_canonical_basis_projs(&self, cb: &[usize]) -> Vec<Op<Complex<R>>>{
         let n = cb.len();
         let k = self.basis_size as usize;
         let mut cb_vec = Vec::new();
         for e_basis in self.basis_sequence.iter(){
-            let mut cb_proj :Op<R> = Op::<R>::zeros(n, k);
+            let mut cb_proj :Op<Complex<R>> = Op::zeros(n, k);
             for i in 0..n{
                 let mut row = cb_proj.row_mut(i);
                 row.copy_from(&e_basis.row(cb[i]));
@@ -266,17 +285,17 @@ where R: RealField + Float,  Complex<R>: ComplexScalar<R>
         cb_vec
     }
 
-    pub fn transform_to_partition(&self, op: &Op<R>, p: usize) -> Op<R>{
+    pub fn transform_to_partition(&self, op: &Op<Complex<R>>, p: usize) -> Op<Complex<R>>{
         let vecs = &self.basis_sequence[p];
         change_basis(op,  vecs)
     }
 
-    pub fn advance_partition(&self, op: &Op<R>, p0: usize ) -> Op<R>{
+    pub fn advance_partition(&self, op: &Op<Complex<R>>, p0: usize ) -> Op<Complex<R>>{
         let projs = &self.projector_sequence[p0];
         change_basis(op, projs)
     }
 
-    pub fn projector(&self, p0: usize) -> &Op<R>{
+    pub fn projector(&self, p0: usize) -> &Op<Complex<R>>{
         &self.projector_sequence[p0]
     }
 }
@@ -285,7 +304,7 @@ where R: RealField + Float,  Complex<R>: ComplexScalar<R>
 mod tests{
     use super::TimePartHaml;
     use crate::util::{TimeDepMatrix, TimeDepMatrixTerm};
-    use crate::base::pauli::dense as pauli;
+    use crate::base::pauli::matrix as pauli;
     use num_complex::Complex64 as c64;
     use num_complex::Complex;
     use cblas::c32;

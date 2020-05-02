@@ -8,9 +8,10 @@ use nalgebra::{Vector3};
 use ndarray::{Array1, Array2, ArrayView1, ArrayViewMut1};
 use num_traits::{Zero, Float};
 
-use qrs::semi::langevin::{spin_langevin_step, SpinVector3DAligned4xf64,
-                            xyz_to_array_chunks, SpinLangevinWorkpad};
-use qrs::util::simd_phys::vf64::Aligned4xf64;
+use qrs::semi::langevin::{spin_langevin_step,
+                            xyz_to_array_chunks, SpinLangevinWorkpad, StepResult};
+use simd_phys::vf64::Aligned4xf64;
+use simd_phys::r3::Vector3d4xf64;
 use itertools::Itertools;
 
 
@@ -39,8 +40,9 @@ fn test_sym_langevin_step(){
 
     let tf = 20_000.0;
     let delta_t = 0.1;
-    let b = 0.0;
-    let eta = 0.0;
+    let b = 0.0 * 1.0e-4;
+    let eta = 1.0e-4;
+    let num_traj = 100;
     let time_points = itertools_num::linspace(0.0, tf, 21).collect_vec();
 
     let mut rngt = thread_rng();
@@ -55,11 +57,14 @@ fn test_sym_langevin_step(){
     let sched_a = |t:f64|  sched_a_dw2kq_nsi(sched(t));
     let sched_b = |t:f64|  sched_b_dw2kq_nsi(sched(t));
 
-    let haml_fn = |t: f64, m: &ArrayView1<SpinVector3DAligned4xf64>, h: &mut ArrayViewMut1<SpinVector3DAligned4xf64>|{
+    //let sched_a = |t: f64| 0.0;
+    //let sched_b = |t: f64| 10.0;
+
+    let haml_fn = |t: f64, m: &ArrayView1<Vector3d4xf64>, h: &mut ArrayViewMut1<Vector3d4xf64>|{
         for (i, hi) in (0usize..3).zip(h.iter_mut())
         {
             let mut hz :Aligned4xf64 = Zero::zero();
-            hz += -0.5;
+            if i == 0 {hz += -1.0;}
             unsafe{
                 //hz += -( m.uget((i+1)%3)[2] + m.uget((i+2)%3)[2] )
                 hz += m.uget((i+1)%3)[2] * -1.0;
@@ -75,8 +80,8 @@ fn test_sym_langevin_step(){
     };
 
     let rand_fn = |rng: &mut Xoshiro256Plus|
-                   -> SpinVector3DAligned4xf64{
-        let mut sv : SpinVector3DAligned4xf64 = Zero::zero();
+                   -> Vector3d4xf64{
+        let mut sv : Vector3d4xf64 = Zero::zero();
 
         sv[0] = if b > 0.0 {rng.sample(StandardNormal)} else { Zero::zero() } ;
         sv[1] = if b > 0.0 {rng.sample(StandardNormal)} else { Zero::zero() } ;
@@ -85,7 +90,7 @@ fn test_sym_langevin_step(){
         sv
     };
 
-    let mut measure_stats = |i:u64, t: f64, m: &Array2<SpinVector3DAligned4xf64>|
+    let mut measure_stats = |i:u64, t: f64, m: &Array2<Vector3d4xf64>|
                              -> Result<(), ()>
         {
             for (q, cols) in m.gencolumns().into_iter().enumerate(){
@@ -112,8 +117,8 @@ fn test_sym_langevin_step(){
             Ok(())
         };
 
-    let arr_shape = (1, 3);
-    let mut m0 : Array2<SpinVector3DAligned4xf64> = Array2::from_elem(arr_shape,Zero::zero());
+    let arr_shape = (num_traj, 3);
+    let mut m0 : Array2<Vector3d4xf64> = Array2::from_elem(arr_shape,Zero::zero());
     let mut mf = m0.clone();
     let mut work = SpinLangevinWorkpad::from_shape(arr_shape.0, arr_shape.1);
 
@@ -121,13 +126,36 @@ fn test_sym_langevin_step(){
         sv[0] = Aligned4xf64::from(1.0);
     }
 
+    let max_dt = delta_t * 10.0;
+    let min_dt = delta_t * 1.0e-3;
+    let mut dt = delta_t;
+
     let mut ti = 0;
     let mut i = 0;
     let mut t = 0.0;
+    let mut ri = 0;
 
     loop{
-        spin_langevin_step(&m0, &mut mf, t, delta_t, &mut work, eta, b,
+        let next_t = t + dt;
+        let res = spin_langevin_step(&m0, &mut mf, t, dt, &mut work, eta, b,
                            haml_fn, &mut rng, rand_fn);
+
+        match res{
+            StepResult::Accept(h)  => {
+                dt = ((0.9 / h) * dt).min(max_dt);
+                ri = 0;
+            },
+            StepResult::Reject(h)  =>{
+                println!("Step {} (t = {}) rejected with h = {}", ti, t, h);
+                let new_dt = dt / (1.1*h);
+                if (new_dt < min_dt) && ri >= 3{
+                    panic!("spin_langevin: Step size too small (dt = {})", new_dt);
+                }
+                dt = new_dt.max(min_dt);
+                ri += 1;
+                continue;
+            }
+        }
 
         if t >= time_points[i]{
             println!("t = {} ", t);
@@ -139,37 +167,28 @@ fn test_sym_langevin_step(){
         if t >= tf{
             break;
         }
-
-
-        t += delta_t;
-        swap(&mut m0, &mut mf); // Set m0 to the current data
-
-        let z0 = m0[(0, 1)].z.dat[0];
-        let z1 = m0[(0, 2)].z.dat[0];
-        if (z0 - z1).abs() > f64::epsilon() {
-            panic!("m_z diverged ({}, {}) at i={}",z0, z1, ti)
-        }
-
+        t = next_t;
         ti += 1;
+        swap(&mut m0, &mut mf); // Set m0 to the current data
     }
 }
 
 
 /// Evaluate the average spin directions (x, y, z), reducing over the array view
 /// and SIMD channel
-fn sv3x4f64_stats(m: ArrayView1<SpinVector3DAligned4xf64>) -> (Vector3<f64>, Vector3<f64>, Vector3<f64>, f64){
+fn sv3x4f64_stats(m: ArrayView1<Vector3d4xf64>) -> (Vector3<f64>, Vector3<f64>, Vector3<f64>, f64){
     let mut mean: Vector3<f64> = Zero::zero();
     let mut mean_sq: Vector3<f64> = Zero::zero();
     let mut mean_4: Vector3<f64> = Zero::zero();
     let mut mean_norm = 0.0;
     for mi in m.iter(){
         //reduce the SIMD
-        let mi_sq = SpinVector3DAligned4xf64::map(mi, |x| x*x);
-        let mi_4 = SpinVector3DAligned4xf64::map(&mi_sq, |x|x*x);
+        let mi_sq = Vector3d4xf64::map(mi, |x| x*x);
+        let mi_4 = Vector3d4xf64::map(&mi_sq, |x|x*x);
         let n = (mi_sq.x + mi_sq.y + mi_sq.z).sum_reduce();
         mean_norm += n;
 
-        let r = SpinVector3DAligned4xf64::map(mi, |x| x.sum_reduce());
+        let r = Vector3d4xf64::map(mi, |x| x.sum_reduce());
         let r_sq = mi_sq.map( |x| x.sum_reduce());
         let r_4 = mi_4.map(|x| x.sum_reduce());
         mean += r;

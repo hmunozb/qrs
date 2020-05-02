@@ -1,11 +1,12 @@
 use nalgebra::{DMatrix, DVector};
-use alga::general::{ComplexField, RealField};
+use qrs_core::{ComplexScalar, RealScalar};
 use num_complex::Complex;
 use smallvec::SmallVec;
 use lapack_traits::LapackScalar;
 use lapacke::Layout;
-
+use crate::{ComplexField, RealField};
 pub type DegenArray = Vec<SmallVec<[usize; 4]>>;
+use num_traits::real::Real;
 
 
 
@@ -13,13 +14,13 @@ pub type DegenArray = Vec<SmallVec<[usize; 4]>>;
 /// Friendly reminder that Gram-Schmidt is unstable and is only used here for quick
 /// and dirty ortho on matrices that are already almost unitary
 pub fn gram_schmidt_ortho<S>(v: &mut DMatrix<S>)
-where S: ComplexField{
+where S: ComplexScalar{
     let sh = v.shape();
     if sh.0 != sh.1{
         panic!("gram_schimdt_ortho: matrix must be square")
     }
     let n = sh.0;
-    //let mut norms : DVector<S::RealField> = DVector::zeros(n);
+    //let mut norms : DVector<S::RealScalar> = DVector::zeros(n);
 
     v.column_mut(0).normalize_mut();
     for i in 1..n{
@@ -38,7 +39,7 @@ where S: ComplexField{
 }
 
 pub fn qr_ortho<S>(mut v: DMatrix<S>) -> DMatrix<S>
-where S: ComplexField+LapackScalar
+where S: ComplexScalar+LapackScalar
 {
     let sh = v.shape();
     if sh.0 != sh.1{
@@ -75,7 +76,7 @@ where S: ComplexField+LapackScalar
 /// w_deg: (n x k) k orthogonal column vectors of dimension n
 /// w_rel: (n x k) relative orthogonal vectors to rotate w_deg onte as close as possible
 pub fn handle_degeneracies_qr<S>(w_deg: &DMatrix<S>, w_rel: &DMatrix<S>) -> DMatrix<S>
-where S: ComplexField+LapackScalar
+where S: ComplexScalar+LapackScalar
 {
     let v = w_deg.ad_mul(w_rel);  // k x k w_rel onto w_deg overlap
     let q = qr_ortho(v);  // reorthogonalize in w_deg subspace
@@ -90,7 +91,7 @@ where S: ComplexField+LapackScalar
 /// In adiabatic simulation, such a basis minimizes the variation in the diabatic perturbations
 /// of each time step.
 pub fn handle_degeneracies_relative<S>(degens: &DegenArray, w_deg: &mut DMatrix<S>, w_rel: &DMatrix<S>)
-    where S: ComplexField+LapackScalar
+    where S: ComplexScalar+LapackScalar
 {
     for di in degens{
         let i0 = di[0];
@@ -106,12 +107,12 @@ pub fn handle_degeneracies_relative<S>(degens: &DegenArray, w_deg: &mut DMatrix<
 
 pub fn handle_degeneracies_relative_vals<R>(vals: &DVector<R>, w_deg: &mut DMatrix<Complex<R>>,
                                             w_rel: &DMatrix<Complex<R>>, rtol: Option<R>)
-        where R: RealField, Complex<R>: ComplexField+LapackScalar{
+        where R: RealScalar, Complex<R>: ComplexScalar+LapackScalar{
     let degens = degeneracy_detect(vals, rtol);
     handle_degeneracies_relative(&degens, w_deg, w_rel);
 }
 
-pub fn degeneracy_detect<R: RealField>(vals: &DVector<R>, rtol: Option<R>) -> DegenArray{
+pub fn degeneracy_detect<R: RealScalar>(vals: &DVector<R>, rtol: Option<R>) -> DegenArray{
 
     let n = vals.len();
     let rtol = match rtol{ Some(r) => r, None => R::from_subset(&1.0e-8)};
@@ -127,7 +128,7 @@ pub fn degeneracy_detect<R: RealField>(vals: &DVector<R>, rtol: Option<R>) -> De
         let mut j = i+1;
         'b: while j < n {
             let vj = vals[j];
-            let eps : R = ComplexField::abs((vi - vj)/vj);
+            let eps : R = Real::abs((vi - vj)/vj);
             if eps < rtol{
                 di.push(j);
             } else {
@@ -147,8 +148,8 @@ pub fn degeneracy_detect<R: RealField>(vals: &DVector<R>, rtol: Option<R>) -> De
 }
 
 ///Handle degeneracies in the standard basis
-pub fn handle_degeneracies<R: RealField>(degens: &DegenArray, vecs: &mut DMatrix<Complex<R>>)
-where R: RealField, Complex<R>: ComplexField+LapackScalar
+pub fn handle_degeneracies<R: RealScalar>(degens: &DegenArray, vecs: &mut DMatrix<Complex<R>>)
+where R: RealScalar, Complex<R>: ComplexScalar+LapackScalar
 {
 
     for di in degens{
@@ -180,7 +181,7 @@ where R: RealField, Complex<R>: ComplexField+LapackScalar
 /// Handle the phases of a matrix by naively setting the largest element to be a
 /// positive real number.
 pub fn handle_phases<R>(vecs: &mut DMatrix<Complex<R>>)
-where R: RealField, Complex<R>: ComplexField+LapackScalar
+where R: RealScalar, Complex<R>: ComplexScalar+LapackScalar
 {
     for mut col in vecs.column_iter_mut(){
         let (i,j) = col.icamax_full();
@@ -192,7 +193,7 @@ where R: RealField, Complex<R>: ComplexField+LapackScalar
     }
 }
 
-pub fn handle_relative_phases<R:RealField>(vecs: &mut DMatrix<Complex<R>>,
+pub fn handle_relative_phases<R:RealScalar>(vecs: &mut DMatrix<Complex<R>>,
                                            basis: &DMatrix<Complex<R>>,
                                            temp: &mut DMatrix<Complex<R>>) -> usize
 {
@@ -217,7 +218,7 @@ pub fn handle_relative_phases<R:RealField>(vecs: &mut DMatrix<Complex<R>>,
 }
 
 pub fn handle_degeneracies_vals<R>(vals: &DVector<R>, vecs: &mut DMatrix<Complex<R>>, rtol: Option<R>)
-where R: RealField, Complex<R>: ComplexField+LapackScalar
+where R: RealScalar, Complex<R>: ComplexScalar+LapackScalar
 {
     let degens = degeneracy_detect(&vals, rtol);
 

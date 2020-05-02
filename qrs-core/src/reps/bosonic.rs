@@ -3,6 +3,9 @@
 use std::collections::btree_map::{BTreeMap, Entry};
 use crate::algebra::free_algebra::{DynFreeAlgebra, DynVectorSpace, DynVectorSpaceZero, DynAlgebraOne};
 use std::iter::FromIterator;
+use crate::quantum::{QObj, QType, QRep, ConjugatingWrapper, QOpType, QKet, QBra, QOp};
+use crate::ComplexField;
+use std::marker::PhantomData;
 
 //use num_traits::{Zero, One};
 
@@ -11,7 +14,7 @@ use std::iter::FromIterator;
 /// followed by raising it by nr
 /// Note that no entry for i is implicitly (i, (0, 0)), which is an identity operation
 /// A zero operation is represented by None
-#[derive(PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct NormalBosonic{
     b: Option<BTreeMap<u16, (u16, u16)>>
 }
@@ -68,13 +71,11 @@ impl DynAlgebraOne for NormalBosonic{
 }
 
 impl NormalBosonic{
-
-
     pub fn from_iter<T: IntoIterator<Item = (u16, (u16, u16))>>(iter: T)-> Self{
         let b = BTreeMap::from_iter(iter);
         NormalBosonic{b: Some(b)}
     }
-    pub fn apply_to_basis(&self, u: BosonicBasisKet) -> BosonicBasisKet{
+    pub fn apply_to_basis_ket(&self, u: BosonicBasisKet) -> BosonicBasisKet{
         let mut u = u;
 
         match &self.b{
@@ -90,6 +91,19 @@ impl NormalBosonic{
         }
 
         u
+    }
+
+    pub fn apply_to_basis_ket_ref(&self, u: &BosonicBasisKet) -> BosonicBasisKet{
+        let mut u = u.clone();
+        self.apply_to_basis_ket(u)
+    }
+
+    pub fn apply_to_ket<T: ComplexField>(&self, mut u: BosonicKet<T>) -> BosonicKet<T>{
+        u.linear_map(&|ui| self.apply_to_basis_ket(ui), &|t| t)
+    }
+
+    pub fn apply_to_ket_ref<T: ComplexField>(&self, u: &BosonicKet<T>) -> BosonicKet<T>{
+        u.linear_map_ref(&|ui| self.apply_to_basis_ket_ref(ui), &|&t| t)
     }
 
 //    pub fn normal_form_product(a1: Self, a2: Self) {
@@ -126,7 +140,8 @@ impl NormalBosonic{
 /// annihilate the state as appropriate. Applying raise_n and lower_n with n=0 is a no-op.
 /// Thus, the only entries in the map are indices with non-zero particle numbers.
 /// This guarantees that two basis kets are equal if and only if
-/// their map entries are the same
+/// their map entries are the same, precisely the PartialEq condition of BTreeMap
+#[derive(Clone, PartialEq)]
 pub struct BosonicBasisKet{
     b: Option<BTreeMap<u16, u16>>
 }
@@ -204,9 +219,140 @@ impl BosonicBasisKet{
             self.b = None;
         }
     }
+
+    /// Dots the two basis kets in a canonical manner
+    /// If either ket is none (annihilated) the dot is zero
+    /// otherwise, compare whether the quantum numbers are equal
+    fn dot(&self, other: &Self) -> bool{
+        self.b.as_ref().map_or(
+            false,
+            |t| other.b.as_ref().map_or(
+                   false,
+                    |t2| t == t2
+               )
+        )
+    }
+
 }
 
-type BosonicKet<T> = DynVectorSpace<BosonicBasisKet, T>;
 
+type BosonicKet<T> = DynVectorSpace<BosonicBasisKet, T>;
+type BosonicBra<T> = ConjugatingWrapper<BosonicKet<T>>;
 type BasisKet = BTreeMap<u16, u16>;
-type Op<T> = DynFreeAlgebra<NormalBosonic, T>;
+type BosonicOp<T> = DynFreeAlgebra<NormalBosonic, T>;
+
+pub struct BosonicQRep<T>{
+    _phantom: PhantomData<T>
+}
+
+impl<T: ComplexField> QRep<T> for BosonicQRep<T>{
+    type KetRep = BosonicKet<T>;
+    type BraRep = BosonicBra<T>;
+    type OpRep = BosonicOp<T>;
+
+    fn qbdot(bra: &Self::BraRep, ket: &Self::KetRep) -> T {
+        bra.q.evaluate_ref(
+            &|ui|{ ket.evaluate_ref(
+                &|vi| if ui.dot(vi) {T::one()} else {T::zero()},
+                &|&t| t,
+                &T::zero() )},
+            &|&t| t,
+            &T::zero()
+        )
+    }
+
+    fn qdot(u: &Self::KetRep, v: &Self::KetRep) -> T {
+        u.evaluate_ref(
+            &|ui|{ v.evaluate_ref(
+                &|vi| if ui.dot(vi) {T::one()} else {T::zero()},
+                 &|&t| t,
+                &T::zero() )},
+            &|t| t.conjugate(),
+            &T::zero()
+        )
+    }
+
+
+    fn khemv(op: &BosonicOp<T>, alpha: T, x: &Self::KetRep, y: &mut Self::KetRep, beta: T) {
+        if beta.is_zero(){
+
+            // *y = op.evaluate_ref(&|xi| DynVectorSpace::Element(xi.apply_to_ket_ref(x)),
+            //                      &|&t| t,
+            //                      &DynVectorSpace::Zero,
+            //                     &DynVectorSpace::Element(x.clone()))
+        }
+    }
+}
+
+impl<T: ComplexField> QObj<T> for BosonicKet<T>{
+    type Rep = BosonicQRep<T>;
+    type Dims = ();
+
+    fn qdim(&self) -> Self::Dims {
+        ()
+    }
+
+    fn qtype(&self) -> QType {
+        QType::QKet
+    }
+
+    fn qaxpy(&mut self, a: T, x: &Self) {
+        let ax = x.clone() * a;
+        *self += ax;
+    }
+
+    fn qscal(&mut self, a: T) {
+        *self *= a;
+    }
+
+    fn qaxby(&mut self, a: T, x: &Self, b: T) {
+        *self *= b;
+        let ax = x.clone() * a;
+        *self += ax;
+    }
+}
+
+impl<T: ComplexField> QKet<T> for BosonicKet<T> { }
+impl<T: ComplexField> QBra<T> for BosonicBra<T> { }
+
+impl<T: ComplexField> QObj<T> for BosonicOp<T>{
+    type Rep = BosonicQRep<T>;
+    type Dims = ();
+
+    fn qdim(&self) -> Self::Dims {
+        ()
+    }
+
+    fn qtype(&self) -> QType {
+        QType::QOp(QOpType::Ge)
+    }
+
+    fn qaxpy(&mut self, a: T, x: &Self) {
+        let ax = x.clone() * a;
+        *self += ax;
+    }
+
+    fn qscal(&mut self, a: T) {
+        *self *= a;
+    }
+
+    fn qaxby(&mut self, a: T, x: &Self, b: T) {
+        *self *= b;
+        let ax = x.clone() * a;
+        *self += ax;
+    }
+}
+
+impl<T: ComplexField> QOp<T> for BosonicOp<T>{ }
+
+#[cfg(test)]
+mod tests{
+    use super::*;
+
+    #[test]
+    fn test_bosonic(){
+        let vac = NormalBosonic::zero();
+        let a1 = NormalBosonic::from_iter(vec![(0,(2,3)), (1, (1,4))]);
+    }
+
+}

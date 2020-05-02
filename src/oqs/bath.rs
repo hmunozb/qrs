@@ -1,24 +1,25 @@
-use alga::general::{RealField, ComplexField};
+use crate::{RealScalar,RealField, ComplexField};
 //use std::marker::PhantomData;
 use integrators::gsl::{QAWC, QAGIU, QAGIL};
 use itertools_num::linspace;
 use integrators::Integrator;
 use crate::util::{LinearInterpFn, InterpBounds};
+use num_traits::real::Real;
 
-pub trait Bath<N: RealField> {
+pub trait Bath<N: RealScalar> {
     fn gamma(&self, omega: N) -> N;
     fn has_lamb_shift(&self) -> bool;
     fn lamb_shift(&self, omega:N) -> Option<N>;
 }
 
-pub struct OhmicBath<N: RealField>{
+pub struct OhmicBath<N: RealScalar>{
     eta: N,
     omega_c: N,
     beta: N,
     lamb: Option<LinearInterpFn<N>>
 }
 
-impl<N:RealField> OhmicBath<N>{
+impl<N:RealScalar> OhmicBath<N>{
     pub fn new( eta:N, omega_c:N, beta:N) -> Self{
         Self{eta, omega_c, beta, lamb:None}
     }
@@ -70,7 +71,7 @@ impl<N:RealField> OhmicBath<N>{
 }
 
 
-impl<N:RealField> Bath<N> for OhmicBath<N>{
+impl<N:RealScalar> Bath<N> for OhmicBath<N>{
 
 
     /// Calculates the ohmic rate of the frequency
@@ -80,11 +81,12 @@ impl<N:RealField> Bath<N> for OhmicBath<N>{
     /// As w -> 0
     /// g = 2 pi eta /beta
     fn gamma(&self, omega:N) -> N {
-        if ComplexField::abs(self.beta * omega) < N::from_subset(&1.0e-8){
+
+        if RealField::abs(self.beta * omega) < N::from_subset(&1.0e-8){
             N::two_pi() * self.eta / self.beta
         } else {
-            N::two_pi() * self.eta * omega * N::exp(- omega.abs()/self.omega_c)
-                /(N::one() - N::exp(-self.beta*omega))
+            N::two_pi() * self.eta * omega * Real::exp(- omega.abs()/self.omega_c)
+                /(N::one() - Real::exp(-self.beta*omega))
         }
     }
 
