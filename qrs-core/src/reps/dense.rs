@@ -20,6 +20,7 @@ pub type Ket<N> = Array1<N>;
 pub type Bra<N> = ConjugatingWrapper<Array1<N>>;
 pub type Op<N> =  Array2<N>;
 
+#[derive(Clone)]
 pub struct DenseQRep<N>
     where N: Scalar
 { _phantom: PhantomData<N> }

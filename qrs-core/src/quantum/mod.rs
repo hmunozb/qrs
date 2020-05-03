@@ -48,7 +48,7 @@ Sized + Clone +
 /// Quantum Representation Trait
 /// Implemented for zero-size/small structures to define how to perform
 /// certain quantum operations in the given representation.
-pub trait QRep <N: ComplexScalar>: Sized{
+pub trait QRep <N: ComplexScalar>: Clone{
     type KetRep:    QKet<N, Rep=Self>;
     type BraRep:    QBra<N, Rep=Self>;
     type OpRep:     QOp<N, Rep=Self>;

@@ -300,10 +300,6 @@ pub struct AME<'a, B: Bath<f64>>{
 }
 
 impl<'a, B: Bath<f64>> AME<'a, B> {
-//    pub fn from_operators(haml_mat: TimeDepMatrix<'a, Complex<f64>>,
-//                          lindblad_ops: &'a Vec<Op<c64>>){
-//        let haml = TimePartHaml::new(TimeDepMatrix,)
-//    }
 
     pub fn new(haml: &'a TimePartHaml<'a, f64>,
                lindblad_ops: &'a Vec<Op<c64>>,
@@ -648,7 +644,6 @@ pub fn solve_ame<B: Bath<f64>>(
     let mut norm_est = condest::Normest1::new(n, 2);
     let mut rho0 = initial_state;
     let mut last_delta_t : Option<f64> = None;
-    //let mut last_eigs : Op<c64> = Op::<f64>::zeros(n,n);
     let mut rho_vec: Vec<Op<c64>> = Vec::new();
     let mut eigvecs: Vec<Op<c64>> = Vec::new();
     let mut results_parts = Vec::new();
@@ -682,9 +677,8 @@ pub fn solve_ame<B: Bath<f64>>(
             //let absm = m.map(|c|c.abs());
                 //absm.row_sum().amax()/ ( (n as f64).sqrt())
                 //m.lp_norm(1)
-                let arr: ArrayView2<_> = ArrayView2::from_shape((n, n), m.as_slice()).unwrap();
-                norm_est.normest1(&arr, 5) / ( (n as f64).sqrt())
-
+            let arr: ArrayView2<_> = ArrayView2::from_shape((n, n), m.as_slice()).unwrap();
+            norm_est.normest1(&arr, 5) / ( (n as f64).sqrt())
         };
 
         let mut rhodag = rho0.clone();
@@ -721,11 +715,6 @@ pub fn solve_ame<B: Bath<f64>>(
                                 trace!("t={} *** Elevated rejection rate ***\n\t (90% EMA: {})\t\tRejected step size: {}",
                                       solver.ode_data().t, ema_rej, solver.ode_data().next_dt)
                             }
-//                            let rej_rate = rejects as f64 / iters as f64;
-//                            if iters > 10 && (rej_rate > 0.4) {
-//                                warn!("t={}\tHigh rejection rate ({}). Rejected step size: {}",
-//                                      solver.ode_data().t, rej_rate, solver.ode_data().next_dt)
-//                            }
                         },
                         _ => {}
                     }
@@ -818,24 +807,11 @@ mod tests{
         let lz = sz.clone();
         let lind_ops = vec![lz];
 
-
         let haml = TimeDepMatrix::new(vec![hx, hy]);
         let haml_part = TimePartHaml::new(haml, 2, 0.0, tf,1);
 
         let mut ame = AME::new(&haml_part, &lind_ops, &bath);
         let rho0 = (id.clone() + &sy)/c64::from(2.0);
-
-//        let mut split = make_ame_split(2);
-//        let mut spl1 = ame.generate_split(&[0.50*tf, 0.51*tf], (),0);
-//        spl1[0].scale(c64::from(0.1));
-//
-//        let spu1 = split.exp(&spl1[0]);
-//
-//        let rho0 = (id.clone() + &sy)/c64::from(2.0);
-//        let rho1 = split.map_exp(&spu1, &rho0);
-//
-//        println!("Initial adiabatic density matrix:\n{}", rho0);
-//        println!("Action at tf/2:\n{}", rho1);
 
         let rhof = solve_ame(
             &mut ame, rho0, 1.0e-6, 0.1);
@@ -884,16 +860,6 @@ mod tests{
 
         let rho0 = (id.clone() + sz.clone())/c64::from(2.0);
         println!("Initial adiabatic density matrix:\n{}", rho0);
-
-//        let mut split = make_ame_split(2);
-//        let mut spl1 = ame.generate_split(&[0.50*tf, 0.51*tf], 0);
-//        spl1[0].scale(c64::from(0.05));
-//
-//        let spu1 = split.exp(&spl1[0]);
-//
-//        let rho1 = split.map_exp(&spu1, &rho0);
-//
-//        println!("Action at tf/2:\n{}", rho1);
 
         let rhof = solve_ame(&mut ame, rho0, 1.0e-10, 0.1);
         match rhof{

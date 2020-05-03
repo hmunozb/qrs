@@ -12,9 +12,11 @@ pub type Ket<N> = DVector<N>;
 pub type Bra<N> = DVector<N>;
 pub type Op<N> =  DMatrix<N>;
 
+#[derive(Clone)]
 pub struct DenseQRep<N: ComplexScalar>
 { _phantom: PhantomData<N> }
 
+#[derive(Clone)]
 pub struct LC<N> where N: ComplexScalar{
     _phantom: PhantomData<N>
 }

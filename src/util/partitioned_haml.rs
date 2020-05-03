@@ -229,12 +229,12 @@ where R: RealScalar + Float,  Complex<R>: EigScalar<R=R>
         None
     }
 
-    fn p_eiger(&self) -> EigResolver<Complex<R>>{
-        let k = self.basis_size;
-        let eiger: EigResolver<Complex<R>> = EigResolver::new_eiger(
-            k , EigJob::ValsVecs, EigRangeData::all());
-        eiger
-    }
+    // fn p_eiger(&self) -> EigResolver<Complex<R>>{
+    //     let k = self.basis_size;
+    //     let eiger: EigResolver<Complex<R>> = EigResolver::new_eiger(
+    //         k , EigJob::ValsVecs, EigRangeData::all());
+    //     eiger
+    // }
 
     pub fn basis_size(&self) -> u32{
         return self.basis_size;

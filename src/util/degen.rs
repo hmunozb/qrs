@@ -8,9 +8,6 @@ use crate::{ComplexField, RealField};
 pub type DegenArray = Vec<SmallVec<[usize; 4]>>;
 use num_traits::real::Real;
 
-
-
-
 /// Friendly reminder that Gram-Schmidt is unstable and is only used here for quick
 /// and dirty ortho on matrices that are already almost unitary
 pub fn gram_schmidt_ortho<S>(v: &mut DMatrix<S>)
@@ -124,7 +121,7 @@ pub fn degeneracy_detect<R: RealScalar>(vals: &DVector<R>, rtol: Option<R>) -> D
 
     //apologies for the c style index arithmetic
     let mut i = 0;
-    'a: while i < n {
+    while i < n {
         let vi = vals[i];
         let mut di  = SmallVec::new();
         di.push(i);
@@ -197,6 +194,12 @@ where R: RealScalar, Complex<R>: ComplexScalar+LapackScalar
     }
 }
 
+/// Standardize the phases of the column vectors in vecs with respect to a basis E
+///   * U' = E^{\dag} U
+///   * for each column vector v' in U', find the index of the component v'_i with the largest magnitude
+///   *  set v' <- e^{-i arg v'_i} v'
+///
+/// Returns the number of vectors v' that had zero magnitude.
 pub fn handle_relative_phases<R:RealScalar>(vecs: &mut DMatrix<Complex<R>>,
                                            basis: &DMatrix<Complex<R>>,
                                            temp: &mut DMatrix<Complex<R>>) -> usize

@@ -241,6 +241,7 @@ type BosonicBra<T> = ConjugatingWrapper<BosonicKet<T>>;
 type BasisKet = BTreeMap<u16, u16>;
 type BosonicOp<T> = DynFreeAlgebra<NormalBosonic, T>;
 
+#[derive(Clone)]
 pub struct BosonicQRep<T>{
     _phantom: PhantomData<T>
 }
