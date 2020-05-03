@@ -1,19 +1,19 @@
-use rand::prelude::*;
-use rand_xoshiro::Xoshiro256Plus;
-use rand_distr::StandardNormal;
 use std::fmt;
 use std::fmt::Display;
 use std::mem::swap;
-use nalgebra::{Vector3};
+
+use itertools::Itertools;
+use nalgebra::Vector3;
 use ndarray::{Array1, Array2, ArrayView1, ArrayViewMut1};
-use num_traits::{Zero, Float};
+use num_traits::{Float, Zero};
+use rand::prelude::*;
+use rand_distr::StandardNormal;
+use rand_xoshiro::Xoshiro256Plus;
+use simd_phys::r3::Vector3d4xf64;
+use simd_phys::vf64::Aligned4xf64;
 
 use qrs::semi::langevin::{spin_langevin_step,
-                            xyz_to_array_chunks, SpinLangevinWorkpad, StepResult};
-use simd_phys::vf64::Aligned4xf64;
-use simd_phys::r3::Vector3d4xf64;
-use itertools::Itertools;
-
+                          SpinLangevinWorkpad, StepResult, xyz_to_array_chunks};
 
 pub struct SVDStats{
     i: u64,

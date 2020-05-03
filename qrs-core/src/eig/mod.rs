@@ -6,6 +6,8 @@ use crate::quantum::{QObj, QRep};
 pub mod dense;
 pub mod dmatrix;
 
+pub use lapacke::Layout;
+
 #[derive(Copy,Clone)]
 pub enum EigJob{
     ValsVecs,

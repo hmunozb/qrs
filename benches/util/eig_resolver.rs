@@ -1,12 +1,15 @@
-use criterion::{Criterion, BenchmarkId};
-
-
+use criterion::{BenchmarkId, Criterion};
+use nalgebra::DMatrix;
 use num_complex::Complex64 as c64;
-use nalgebra::{DMatrix};
-use qrs::util::*;
-use super::*;
 use rand::prelude::*;
-use rand_distr::{StandardNormal, Normal};
+use rand_distr::{Normal, StandardNormal};
+
+use qrs_core::reps::matrix::*;
+use qrs_core::eig::dense::EigResolver;
+use qrs_core::eig::{EigJob, Layout, QEiger};
+use qrs::util::*;
+
+use super::*;
 
 static _1z: c64 = c64{re:1.0, im:0.0};
 static _m1z: c64 = c64{re:-1.0, im:0.0};
@@ -23,28 +26,28 @@ static _sz : [c64; 4] = [   _1z, _0z,
 
 #[test]
 fn test_hermitian(){
+    use qrs_core::quantum::QObj;
+    use qrs::base::pauli::matrix as pauli;
 
-    let sx : DMatrix<c64> = DMatrix::from_iterator(2, 2,
-                                                   _sx.iter().cloned())    ;
-    let sy : DMatrix<c64> = DMatrix::from_iterator(2, 2,
-                                                   _sy.iter().cloned())   ;
-    let sz : DMatrix<c64> = DMatrix::from_iterator(2, 2,
-                                                   _sz.iter().cloned());
+    let sx = pauli::sx::<f64>();
+    let sy = pauli::sy::<f64>();
+    let sz = pauli::sz::<f64>();
 
-    let h =  sx.scale(0.5) + sy;
+    let h =  sx.clone().qscal(Complex::from(0.5)) + sy;
     println!("Matrix:\n {}", h);
 
     let mut eig_resolver : EigResolver<c64> = EigResolver::new(
-        2, EigJob::ValsVecs, EigRangeData::all(), false);
+        2, EigJob::ValsVecs, EigRangeData::all(),  Layout::RowMajor,false);
 
     let m = eig_resolver.borrow_matrix();
     m.copy_from(& h);
     //m[(1, 0)] = _0z;
     println!("C Upper Triangular layout:\n{:#?}", m.as_slice());
 
-    eig_resolver.eig();
-    println!("Eigenvalues:\n {} ", eig_resolver.vals());
-    println!("Eigenvectors:\n {} ", eig_resolver.vecs());
+    let (vals, vecs) = eig_resolver.eigh(&h);
+    let vals = DMatrix::from_shape_vec(2, vals);
+    println!("Eigenvalues:\n {} ", vals);
+    println!("Eigenvectors:\n {} ", vecs);
 
     println!("Working!...");
 
@@ -52,7 +55,6 @@ fn test_hermitian(){
         let m = eig_resolver.borrow_matrix();
         m.copy_from(& h);
         eig_resolver.eig();
-
     }
 }
 
@@ -63,12 +65,11 @@ where Fun: FnMut(&mut DMatrix<c64>)
     //let n = h.nrows() as u32;
 
     let mut eig_resolver : EigResolver<c64> = EigResolver::new(
-        n, EigJob::ValsVecs, EigRangeData::all(), false);
-
+        n, EigJob::ValsVecs, EigRangeData::all(),  Layout::RowMajor,false);
+    let mut m = Op::zeros(n as usize, n as usize);
     for i in 0..k{
-        let m = eig_resolver.borrow_matrix();
-        f(m);
-        eig_resolver.eig();
+        f(&mut m);
+        QEiger::<c64, DenseQRep<c64>>::eigh(&mut eig_resolver, &m);
     }
 
 }

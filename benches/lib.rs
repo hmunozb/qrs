@@ -1,6 +1,7 @@
 #[macro_use]
 extern crate criterion;
 extern crate qrs;
+extern crate openblas_src;
 
 mod util;
 use util::eig_resolver::{bench_random_10x10_hermitian, bench_random_32x32_hermitian,
