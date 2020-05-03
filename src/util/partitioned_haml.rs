@@ -1,24 +1,26 @@
 use std::iter::FromIterator;
 
-//use blas_traits::{BlasScalar, Tsyheevx};
-use num_traits::{One, Zero, ToPrimitive};
-use num_complex::Complex;
-use nalgebra::{DMatrix, DVector, U1, Dynamic};
 use itertools_num::linspace;
-use log::{info, warn, trace};
-use crate::util::time_dep_op::TimeDepMatrix;
+use log::{info, trace, warn};
+use nalgebra::{DMatrix, DVector, Dynamic, U1};
+use ndarray::Array1;
+use num_complex::Complex;
+//use blas_traits::{BlasScalar, Tsyheevx};
+use num_traits::{One, ToPrimitive, Zero};
 use num_traits::Float;
+
 use qrs_core::eig::{EigJob, EigQRep};
-//use qrs_core::util::array::{change_basis};
-use crate::util::change_basis;
-use crate::util::{EigRangeData, EigResolver, TimeDependentOperator};
-//use crate::util::degen::{handle_degeneracies_vals, handle_phases, degeneracy_detect, handle_degeneracies};
-use crate::{ComplexScalar, RealScalar};
+use qrs_core::eig::dmatrix::EigScalar;
 //use qrs_core::reps::dense::{DenseQRep, Op};
 use qrs_core::eig::QEiger;
-use qrs_core::eig::dmatrix::EigScalar;
 use qrs_core::reps::matrix::{DenseQRep, Op};
-use ndarray::Array1;
+
+//use crate::util::degen::{handle_degeneracies_vals, handle_phases, degeneracy_detect, handle_degeneracies};
+use crate::{ComplexScalar, RealScalar};
+use crate::util::{EigRangeData, EigResolver, TimeDependentOperator};
+//use qrs_core::util::array::{change_basis};
+use crate::util::change_basis;
+use crate::util::time_dep_op::TimeDepMatrix;
 
 // pub type TimeDepQOp<'a, R: RealScalar> = TimeDependentOperator<'a, R, Complex<R>,
 //     DenseQRep<Complex<R>>, Op<Complex<R>> >;
@@ -303,12 +305,14 @@ where R: RealScalar + Float,  Complex<R>: EigScalar<R=R>
 
 #[cfg(test)]
 mod tests{
-    use super::TimePartHaml;
-    use crate::util::{TimeDepMatrix, TimeDepMatrixTerm};
-    use crate::base::pauli::matrix as pauli;
-    use num_complex::Complex64 as c64;
-    use num_complex::Complex;
     use cblas::c32;
+    use num_complex::Complex;
+    use num_complex::Complex64 as c64;
+
+    use crate::base::pauli::matrix as pauli;
+    use crate::util::{TimeDepMatrix, TimeDepMatrixTerm};
+
+    use super::TimePartHaml;
 
     #[test]
     fn test_part_haml(){

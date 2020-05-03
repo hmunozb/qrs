@@ -1,6 +1,6 @@
-//use interpolation::{lerp,Lerp};
-use crate::{RealField};
 use num_traits::real::Real;
+
+use crate::RealField;
 
 pub enum InterpBounds<N: RealField>{
     Ends,

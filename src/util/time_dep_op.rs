@@ -1,5 +1,5 @@
-use qrs_core::reps::matrix::{Op, DenseQRep};
-use qrs_core::{ComplexScalar};
+use qrs_core::ComplexScalar;
+use qrs_core::reps::matrix::{DenseQRep, Op};
 pub use qrs_timed::timed_op::*;
 
 pub type TimeDepMatrixTerm<'a, N> = TimeDependentOperatorTerm<'a, <N as ComplexScalar>::R, N, DenseQRep<N>, Op<N>>;

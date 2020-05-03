@@ -1,31 +1,33 @@
-use crate::util::*;
-use qrs_core::reps::matrix::*;
-use qrs_core::quantum::{QRep, QObj};
-use crate::oqs::bath::Bath;
-//use crate::ode::dense::DenseExpiSplit;
-use crate::ode::super_op::{KineticExpSplit, CoherentExpSplit, DenMatExpiSplit};
-use crate::ode::super_op::{MaybeScalePowExp};
-use qrs_core::{ComplexField, RealScalar};
 use lapack_traits::LapackScalar;
-use log::{info, error, warn, trace};
-use num_traits::{Zero, Float};
+use log::{error, info, trace, warn};
+use nalgebra::{DMatrix, DVector};
+use ndarray::ArrayView2;
 use num_complex::Complex;
 use num_complex::Complex64 as c64;
-use nalgebra::{DVector, DMatrix};
+use num_traits::{Float, Zero};
 use smallvec::SmallVec;
-use vec_ode::exp::split_exp::{SemiComplexO4ExpSplit, //StrangSplit,
-                              CommutativeExpSplit, //TripleJumpExpSplit,
-                              RKNR4ExpSplit};
-use vec_ode::exp::{DirectSumL, ExponentialSplit};
-use ndarray::{ ArrayView2};
-use vec_ode::{ODEState, ODEStep, ODESolver, ODESolverBase, ODEError, LinearCombination, LinearCombinationSpace};
-use vec_ode::exp::cfm::ExpCFMSolver;
+use vec_ode::{LinearCombination, LinearCombinationSpace, ODEError, ODESolver, ODESolverBase, ODEState, ODEStep};
 use vec_ode::AdaptiveODESolver;
-use crate::util::degen::{handle_degeneracies, degeneracy_detect,
-                         handle_relative_phases, handle_degeneracies_relative,
-                         handle_degeneracies_relative_vals};
-use crate::util::diff::four_point_gl;
+use vec_ode::exp::{DirectSumL, ExponentialSplit};
+use vec_ode::exp::cfm::ExpCFMSolver;
+use vec_ode::exp::split_exp::{CommutativeExpSplit, //StrangSplit,
+                              RKNR4ExpSplit, //TripleJumpExpSplit,
+                              SemiComplexO4ExpSplit};
+
+use qrs_core::{ComplexField, RealScalar};
+use qrs_core::quantum::{QObj, QRep};
+use qrs_core::reps::matrix::*;
+
 use crate::ComplexScalar;
+//use crate::ode::dense::DenseExpiSplit;
+use crate::ode::super_op::{CoherentExpSplit, DenMatExpiSplit, KineticExpSplit};
+use crate::ode::super_op::MaybeScalePowExp;
+use crate::oqs::bath::Bath;
+use crate::util::*;
+use crate::util::degen::{degeneracy_detect, handle_degeneracies,
+                         handle_degeneracies_relative, handle_degeneracies_relative_vals,
+                         handle_relative_phases};
+use crate::util::diff::four_point_gl;
 
 pub trait Scalar : ComplexScalar + LapackScalar { }
 impl<N> Scalar for N where N: ComplexScalar + LapackScalar{ }
@@ -765,19 +767,22 @@ pub fn solve_ame<B: Bath<f64>>(
 
 #[cfg(test)]
 mod tests{
-    use num_complex::Complex;
-    use super::*;
-    use crate::base::quantum::QRep;
-    use qrs_core::reps::dense::*;
-    use crate::base::pauli::matrix as pauli;
-    use crate::oqs::bath::OhmicBath;
-    use crate::ode::super_op::DenMatExpiSplit;
-    use crate::util::{TimeDepMatrixTerm, TimeDepMatrix, TimePartHaml};
-    use crate::oqs::adiabatic_me::{AME, solve_ame, make_ame_split};
     use alga::general::RealField;
+    use num_complex::Complex;
     use num_complex::Complex64 as c64;
     use num_traits::real::Real;
     use vec_ode::LinearCombination;
+
+    use qrs_core::reps::dense::*;
+
+    use crate::base::pauli::matrix as pauli;
+    use crate::base::quantum::QRep;
+    use crate::ode::super_op::DenMatExpiSplit;
+    use crate::oqs::adiabatic_me::{AME, make_ame_split, solve_ame};
+    use crate::oqs::bath::OhmicBath;
+    use crate::util::{TimeDepMatrix, TimeDepMatrixTerm, TimePartHaml};
+
+    use super::*;
 
     extern crate simple_logger;
 

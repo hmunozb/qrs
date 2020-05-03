@@ -1,17 +1,16 @@
 
 pub mod dense{
     use std::iter::FromIterator;
-    use qrs_core::reps::dense::{Scalar, Op, Ket, tensor_list, DenseQRep};
-    use qrs_core::{RealScalar, ComplexScalar, ComplexField};
-    //use crate::{ComplexField, ComplexScalar, RealField, RealScalar};
-    use num_traits::{Zero, One};
-    use num_complex::Complex;
-    use crate::base::quantum::*;
-    //use qrs_core::reps::dense::*;
-    use ndarray_linalg::Norm;
-    use num_traits::real::Real;
-    //use nalgebra::DMatrix;
 
+    use ndarray_linalg::Norm;
+    use num_complex::Complex;
+    use num_traits::{One, Zero};
+    use num_traits::real::Real;
+
+    use qrs_core::{ComplexField, ComplexScalar, RealScalar};
+    use qrs_core::reps::dense::{DenseQRep, Ket, Op, Scalar, tensor_list};
+
+    use crate::base::quantum::*;
 
     pub enum Eigs{
         Sx(i8),
@@ -148,13 +147,16 @@ pub mod dense{
 pub mod matrix{
     use std::iter::FromIterator;
 
-    use crate::{RealField, ComplexField};
-    use num_traits::{Zero, One};
     use num_complex::Complex;
-    use crate::base::quantum::*;
-    use qrs_core::reps::matrix::*;
+    use num_traits::{One, Zero};
+
     use qrs_core::ComplexScalar;
-    //use nalgebra::DMatrix;
+    use qrs_core::reps::matrix::*;
+
+    use crate::{ComplexField, RealField};
+    use crate::base::quantum::*;
+
+//use nalgebra::DMatrix;
 
 
     pub enum Eigs{

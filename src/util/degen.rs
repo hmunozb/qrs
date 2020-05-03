@@ -1,12 +1,15 @@
-use nalgebra::{DMatrix, DVector};
-use qrs_core::{ComplexScalar, RealScalar};
-use num_complex::Complex;
-use smallvec::SmallVec;
 use lapack_traits::LapackScalar;
 use lapacke::Layout;
-use crate::{ComplexField, RealField};
-pub type DegenArray = Vec<SmallVec<[usize; 4]>>;
+use nalgebra::{DMatrix, DVector};
+use num_complex::Complex;
 use num_traits::real::Real;
+use smallvec::SmallVec;
+
+use qrs_core::{ComplexScalar, RealScalar};
+
+use crate::{ComplexField, RealField};
+
+pub type DegenArray = Vec<SmallVec<[usize; 4]>>;
 
 /// Friendly reminder that Gram-Schmidt is unstable and is only used here for quick
 /// and dirty ortho on matrices that are already almost unitary

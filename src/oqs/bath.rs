@@ -1,10 +1,10 @@
-use crate::{RealScalar,RealField, ComplexField};
-//use std::marker::PhantomData;
-use integrators::gsl::{QAWC, QAGIU, QAGIL};
-use itertools_num::linspace;
+use integrators::gsl::{QAGIL, QAGIU, QAWC};
 use integrators::Integrator;
-use crate::util::{LinearInterpFn, InterpBounds};
+use itertools_num::linspace;
 use num_traits::real::Real;
+
+use crate::{ComplexField, RealField, RealScalar};
+use crate::util::{InterpBounds, LinearInterpFn};
 
 pub trait Bath<N: RealScalar> {
     fn gamma(&self, omega: N) -> N;

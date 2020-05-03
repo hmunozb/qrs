@@ -9,13 +9,13 @@ use vec_ode::exp::{ExpSplitMidpointSolver, MidpointExpLinearSolver};
 use vec_ode::exp::cfm::ExpCFMSolver;
 use vec_ode::exp::magnus::MagnusExpLinearSolver;
 
+use qrs_core::{ComplexScalar, RealScalar};
+use qrs_core::eig::dmatrix::EigScalar;
 use qrs_core::eig::EigJob;
 //use crate::base::quantum::{QRep};
 use qrs_core::eig::QEiger;
-use qrs_core::eig::dmatrix::EigScalar;
 use qrs_core::reps::matrix::*;
 
-use qrs_core::{ComplexScalar, RealScalar};
 use crate::util::{EigRangeData, EigResolver};
 use crate::util::TimeDepMatrix;
 

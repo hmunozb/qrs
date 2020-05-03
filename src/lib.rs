@@ -1,10 +1,12 @@
 #![allow(unused_imports)]
 #![allow(unused_variables)]
+/// QRS - A quantum library for rust
 ///
-extern crate approx;
 extern crate alga;
-extern crate nalgebra;
+extern crate approx;
 extern crate log;
+extern crate nalgebra;
+
 //extern crate packed_simd;
 //pub use qrs_core::ComplexField;
 pub use qrs_core::{ComplexField, RealField};

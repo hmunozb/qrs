@@ -1,26 +1,27 @@
-use crate::{RealScalar, ComplexScalar, ComplexField};
-use expm::Expm;
-use ndarray::{Array2};
-use ndarray::{ArrayView2};
+use std::iter::FromIterator;
 
+use expm::Expm;
+use itertools::Itertools;
+use lapack_traits::LapackScalar;
+use log::warn;
+use nalgebra::DMatrix;
+use ndarray::Array2;
+use ndarray::ArrayView2;
 use num_complex::Complex as C;
 use num_traits::Float;
-use vec_ode::exp::{ExponentialSplit, Commutator};
-use log::warn;
+use num_traits::real::Real;
+use vec_ode::exp::{Commutator, ExponentialSplit};
+use vec_ode::LinearCombination;
+
+use qrs_core::eig::dmatrix::EigScalar;
+use qrs_core::eig::EigJob;
+use qrs_core::eig::QEiger;
 //use qrs_core::reps::dense::*;
 use qrs_core::reps::matrix::*;
-use qrs_core::eig::QEiger;
-use qrs_core::eig::dmatrix::EigScalar;
-use lapack_traits::LapackScalar;
-use qrs_core::eig::EigJob;
-use crate::util::{EigRangeData, EigResolver, change_basis};
-use crate::util::{outer_zip_to,  unchange_basis};
-use std::iter::FromIterator;
-use nalgebra::{DMatrix};
-use itertools::Itertools;
-use vec_ode::LinearCombination;
-use num_traits::real::Real;
 
+use crate::{ComplexField, ComplexScalar, RealScalar};
+use crate::util::{change_basis, EigRangeData, EigResolver};
+use crate::util::{outer_zip_to, unchange_basis};
 
 ///Defines the exponential e^{-i H} for a Hermitian operator H
 /// For Split ODE solvers
@@ -351,10 +352,12 @@ where   T: RealScalar,
 
 #[cfg(test)]
 mod tests{
-    use super::*;
-    use openblas_src;
     use lapacke_sys;
     use num_complex::Complex64 as c64;
+    use openblas_src;
+
+    use super::*;
+
     #[test]
     fn super_op_splits(){
         let _0 = c64::from(0.0);

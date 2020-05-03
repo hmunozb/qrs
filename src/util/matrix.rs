@@ -1,11 +1,12 @@
-use nalgebra::{Matrix,Vector,DMatrix};
-use nalgebra::{Scalar, Dim, U1};
-use nalgebra::base::storage::{ContiguousStorage, ContiguousStorageMut, Storage, StorageMut};
+use cblas::{Layout, Transpose};
 use itertools::Itertools;
-use crate::{ComplexField, RealField};
-use num_complex::Complex;
-use cblas::{Transpose, Layout};
 use lapack_traits::LapackScalar;
+use nalgebra::{DMatrix, Matrix, Vector};
+use nalgebra::{Dim, Scalar, U1};
+use nalgebra::base::storage::{ContiguousStorage, ContiguousStorageMut, Storage, StorageMut};
+use num_complex::Complex;
+
+use crate::{ComplexField, RealField};
 
 /// Computes
 /// out[i, j] = f( a[i], b[j] )
