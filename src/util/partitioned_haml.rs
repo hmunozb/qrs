@@ -8,21 +8,22 @@ use itertools_num::linspace;
 use log::{info, warn, trace};
 use crate::util::time_dep_op::TimeDepMatrix;
 use num_traits::Float;
-use qrs_core::quantum::eig::{EigJob, EigQRep};
+use qrs_core::eig::{EigJob, EigQRep};
 //use qrs_core::util::array::{change_basis};
 use crate::util::change_basis;
 use crate::util::{EigRangeData, EigResolver, TimeDependentOperator};
 //use crate::util::degen::{handle_degeneracies_vals, handle_phases, degeneracy_detect, handle_degeneracies};
 use crate::{ComplexScalar, RealScalar};
 //use qrs_core::reps::dense::{DenseQRep, Op};
-use qrs_core::quantum::eig::QEiger;
+use qrs_core::eig::QEiger;
+use qrs_core::eig::dmatrix::EigScalar;
 use qrs_core::reps::matrix::{DenseQRep, Op};
 use ndarray::Array1;
 
 // pub type TimeDepQOp<'a, R: RealScalar> = TimeDependentOperator<'a, R, Complex<R>,
 //     DenseQRep<Complex<R>>, Op<Complex<R>> >;
 
-pub type TimeDepQOp<'a, R: RealScalar> = TimeDepMatrix<'a, Complex<R>>;
+pub type TimeDepQOp<'a, R> = TimeDepMatrix<'a, Complex<R>>;
 
 pub struct TimePartitionOptions {
     pub nudge_final_partition: bool
@@ -45,7 +46,7 @@ pub struct TimePartHaml<'a, R: RealScalar>
 }
 
 impl<'a, R> TimePartHaml<'a, R>
-where R: RealScalar + Float,  Complex<R>: ComplexScalar<R=R>
+where R: RealScalar + Float,  Complex<R>: EigScalar<R=R>
       //Complex<R>: ComplexField<RealField=R> //+ Tsyheevx
 //where Complex<R> : ComplexScalar<R>
 //where R: RealField

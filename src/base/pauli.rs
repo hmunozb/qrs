@@ -1,13 +1,15 @@
 
 pub mod dense{
     use std::iter::FromIterator;
-
-    use crate::{ComplexField, ComplexScalar, RealField, RealScalar};
+    use qrs_core::reps::dense::{Scalar, Op, Ket, tensor_list, DenseQRep};
+    use qrs_core::{RealScalar, ComplexScalar, ComplexField};
+    //use crate::{ComplexField, ComplexScalar, RealField, RealScalar};
     use num_traits::{Zero, One};
     use num_complex::Complex;
     use crate::base::quantum::*;
-    use qrs_core::reps::dense::*;
+    //use qrs_core::reps::dense::*;
     use ndarray_linalg::Norm;
+    use num_traits::real::Real;
     //use nalgebra::DMatrix;
 
 
@@ -39,20 +41,21 @@ pub mod dense{
     }
 
     fn eig_generic<R: RealScalar>(val: i8, plu: &[Complex<R>], min: &[Complex<R>]) -> Ket<Complex<R>>
-    where Complex<R> : ComplexScalar<R=R> + ComplexField<RealField=R>
+    where Complex<R> : Scalar<R=R> //+ ComplexField<RealField=R>
     {
         if val > 0{
             let mut vec = Ket::from(plu.to_owned());
             let n = vec.mapv(|x| Complex::norm_sqr(&x)).sum();
             let n = ComplexField::sqrt(n);
-            vec /= Complex::from(n);
+            QObj::qscal(&mut vec, Complex::from_real(Real::recip(n)));
+            //vec /= Complex::from(n);
             //vec.normalize_mut();
             vec
         } else if val < 0 {
             let mut vec = Ket::from(min.to_owned());
             let n = vec.mapv(|x| Complex::norm_sqr(&x)).sum();
             let n = ComplexField::sqrt(n);
-            vec /= Complex::from(n);
+            QObj::qscal(&mut vec, Complex::from_real(Real::recip(n)));
             //vec.normalize_mut();
             vec
         } else {
@@ -61,7 +64,7 @@ pub mod dense{
     }
 
     pub fn sx_eig<R: RealScalar>(val: i8)-> Ket<Complex<R>>
-    where Complex<R> : ComplexScalar<R=R>
+    where  Complex<R> : Scalar<R=R>
     {
         eig_generic(val, &[Complex::one(), Complex::one()],
                     &[Complex::one(), -Complex::one()])
@@ -69,14 +72,14 @@ pub mod dense{
 
 
     pub fn sy_eig<R: RealScalar>(val: i8)-> Ket<Complex<R>>
-    where Complex<R> : ComplexScalar<R=R>
+    where  Complex<R> : Scalar<R=R>
     {
         eig_generic(val, &[Complex::i(), Complex::i()],
                     &[Complex::i(), -Complex::i()])
     }
 
     pub fn sz_eig<R: RealScalar>(val: i8)-> Ket<Complex<R>>
-    where Complex<R> : ComplexScalar<R=R>
+    where  Complex<R> : Scalar<R=R>
     {
         eig_generic(val, &[Complex::one(), Complex::zero()],
                     &[Complex::zero(), -Complex::one()])
@@ -88,7 +91,7 @@ pub mod dense{
     }
 
     fn ket_of<R: RealScalar>(eig: &Eigs) -> Ket<Complex<R>>
-    where Complex<R> : ComplexScalar<R=R>
+    where  Complex<R> : Scalar<R=R>
     {
         match eig{
             Eigs::Sx(v) => sx_eig(*v),
@@ -98,7 +101,7 @@ pub mod dense{
     }
 
     pub fn auto_ket<R: RealScalar>(eigs: &[Eigs]) -> Ket<Complex<R>>
-    where Complex<R> : ComplexScalar<R=R>
+    where  Complex<R> : Scalar<R=R>
     {
         if eigs.len() == 0{
             return Ket::zeros(2);
@@ -114,7 +117,7 @@ pub mod dense{
     }
 
     pub fn ket_from_bitstring<R: RealScalar>(bits: &[i8]) -> Ket<Complex<R>>
-    where Complex<R> : ComplexScalar<R=R>
+    where Complex<R> : Scalar<R=R>
     {
         if bits.len() == 0{
             return Ket::zeros(2);
@@ -128,7 +131,7 @@ pub mod dense{
     }
 
     pub fn n_local_pauli<R: RealScalar>(ops: &[(u8, Op<Complex<R>>)], len: u8) -> Op<Complex<R>>
-    where Complex<R> : ComplexScalar<R=R>
+    where Complex<R> : Scalar<R=R>
     {
         let mut tensor_ops :Vec<Op<Complex<R>>> = Vec::new();
         for k in 0..len{
@@ -150,7 +153,7 @@ pub mod matrix{
     use num_complex::Complex;
     use crate::base::quantum::*;
     use qrs_core::reps::matrix::*;
-    use crate::ComplexScalar;
+    use qrs_core::ComplexScalar;
     //use nalgebra::DMatrix;
 
 

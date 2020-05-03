@@ -47,16 +47,20 @@ where S: ComplexScalar+LapackScalar
     }
     let n = sh.0 as i32;
     let mut tau :DVector<S> = DVector::zeros(n as usize);
-    let info = S::geqrf(Layout::ColumnMajor, n, n, v.as_mut_slice(),
-             n, tau.as_mut_slice());
+    let info = unsafe {
+        S::geqrf(Layout::ColumnMajor, n, n, v.as_mut_slice(),
+                 n, tau.as_mut_slice())
+    };
     if info < 0{
         panic!("Illegal argument error - _geqrf returned {}", info);
     } else if info > 0{
         panic!("Unexpected computation error - _geqrf returned {}", info);
     }
 
-    let info = S::ungqr(Layout::ColumnMajor, n, n, n, v.as_mut_slice(), n,
-              tau.as_mut_slice());
+    let info = unsafe {
+        S::ungqr(Layout::ColumnMajor, n, n, n, v.as_mut_slice(), n,
+                 tau.as_mut_slice())
+    };
 
     if info < 0{
         panic!("Illegal argument error - _orqqr/_ungqr returned {}", info);

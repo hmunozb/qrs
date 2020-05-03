@@ -1,21 +1,26 @@
 use crate::{RealScalar, ComplexScalar, SupersetOf};
 //use alga::general::{RealScalar, ComplexScalar, SupersetOf};
+//use ndarray_linalg::Scalar;
 use lapacke::Layout;
-use lapack_traits::{Theevx};
+use lapack_traits::{Theevx, LapackScalar};
 use ndarray::prelude::*;
 use num_traits::{Zero, One, ToPrimitive};
 use crate::reps::dense::*;
-use crate::quantum::eig::{EigRange, EigJob, QEiger, EigQRep};
+use crate::eig::{EigRange, EigJob, QEiger, EigQRep};
 use crate::quantum::*;
+use num_traits::real::Real;
+
+pub trait EigScalar: crate::reps::dense::Scalar + LapackScalar{ }
+impl<N> EigScalar for N where N : crate::reps::dense::Scalar + LapackScalar { }
 
 #[derive(Copy,Clone)]
-pub struct EigRangeData<F: RealScalar>{
+pub struct EigRangeData<F: Real>{
     range: u8,
     vl: F, vu: F,
     il: i32, iu: i32
 }
 
-impl<F: RealScalar> EigRangeData<F>{
+impl<F: Real> EigRangeData<F>{
     pub fn all() -> Self{
         EigRangeData{ range: b'A', vl: F::zero(), vu: F::zero(), il: 0, iu: 0}
     }
@@ -35,7 +40,7 @@ impl<F: RealScalar> EigRangeData<F>{
     }
 }
 
-impl<F: RealScalar> From<EigRange<F>> for EigRangeData<F>{
+impl<F: Real> From<EigRange<F>> for EigRangeData<F>{
     fn from(range: EigRange<F>) -> Self {
         match range{
             EigRange::All => Self::all(),
@@ -60,7 +65,7 @@ struct EigWork<N: ComplexScalar>{
     ifail: Vec<i32>
 }
 
-impl<N: ComplexScalar> EigWork<N>{
+impl<N: ComplexScalar + LapackScalar> EigWork<N>{
     fn new() -> Self{
         EigWork{work: Vec::new(), rwork: Vec::new(), iwork: Vec::new(), ifail: Vec::new()}
     }
@@ -96,7 +101,7 @@ pub struct EigResolver<N: ComplexScalar>{
     eigvecs: Array2<N>
 }
 
-impl<N: ComplexScalar> EigResolver<N>
+impl<N: ComplexScalar+LapackScalar> EigResolver<N>
 {
     pub fn new_with_raw(n: u32, raw: Vec<N>, jobz: EigJob, range: EigRangeData<N::R>,
                layout: Layout,
@@ -121,7 +126,7 @@ impl<N: ComplexScalar> EigResolver<N>
         Self::call_syhe_evx(&mut me, true);
         //This gets stored on the float/complex work array for some reason
         //Hopefully it's a perfectly good positive integer
-        let flwork :f64 = me.eigwork.work[0].re().to_f64().unwrap();
+        let flwork :f64 = me.eigwork.work[0].real().to_f64().unwrap();
         let lwork =  flwork as u32;
         me.eigwork.set_work_sizes(lwork, n);
 
@@ -151,7 +156,7 @@ impl<N: ComplexScalar> EigResolver<N>
         Self::call_syhe_evx(&mut me, true);
         //This gets stored on the float/complex work array for some reason
         //Hopefully it's a perfectly good positive integer
-        let flwork :f64 = me.eigwork.work[0].re().to_f64().unwrap();
+        let flwork :f64 = me.eigwork.work[0].real().to_f64().unwrap();
         let lwork =  flwork as u32;
         me.eigwork.set_work_sizes(lwork, n);
 
@@ -241,7 +246,7 @@ impl<N: ComplexScalar> EigResolver<N>
     }
 }
 
-impl<N: ComplexScalar> QEiger<N, DenseQRep<N>> for EigResolver<N>{
+impl<N: Scalar + LapackScalar> QEiger<N, DenseQRep<N>> for EigResolver<N>{
     fn make_eiger(shape: (usize, usize), job: EigJob, range: EigRange<N::R>) -> Self {
         assert_eq!(shape.0, shape.1);
 
@@ -258,7 +263,7 @@ impl<N: ComplexScalar> QEiger<N, DenseQRep<N>> for EigResolver<N>{
 
 }
 
-impl<N: ComplexScalar> EigQRep<N> for DenseQRep<N>{
+impl<N: Scalar + LapackScalar> EigQRep<N> for DenseQRep<N>{
     fn eig(op: &Op<N>) -> (Vec<N::R>, Self::OpRep) {
         let mut eiger : EigResolver<N> = QEiger::<N, DenseQRep<N>>::make_eiger(op.qdim(), EigJob::ValsVecs, EigRange::All);
         eiger.borrow_matrix().assign(op);

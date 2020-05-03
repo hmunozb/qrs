@@ -82,10 +82,10 @@ impl<N:RealScalar> Bath<N> for OhmicBath<N>{
     /// g = 2 pi eta /beta
     fn gamma(&self, omega:N) -> N {
 
-        if RealField::abs(self.beta * omega) < N::from_subset(&1.0e-8){
+        if Real::abs(self.beta * omega) < N::from_subset(&1.0e-8){
             N::two_pi() * self.eta / self.beta
         } else {
-            N::two_pi() * self.eta * omega * Real::exp(- omega.abs()/self.omega_c)
+            N::two_pi() * self.eta * omega * Real::exp(- Real::abs(omega)/self.omega_c)
                 /(N::one() - Real::exp(-self.beta*omega))
         }
     }

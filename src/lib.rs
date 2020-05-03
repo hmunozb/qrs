@@ -1,5 +1,6 @@
+#![allow(unused_imports)]
+#![allow(unused_variables)]
 ///
-
 extern crate approx;
 extern crate alga;
 extern crate nalgebra;

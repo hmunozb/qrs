@@ -1,7 +1,7 @@
 use crate::quantum::*;
 //use crate::eig::{EigResolver, EigJob, EigRangeData};
 use crate::{ComplexScalar};
-use num_complex::Complex;
+//use num_complex::Complex;
 use nalgebra::{Matrix, DVector, DMatrix};
 use nalgebra::{Dim};
 use nalgebra::base::storage::{StorageMut};

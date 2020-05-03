@@ -1,5 +1,5 @@
 use std::ops::{AddAssign, SubAssign, Index, IndexMut};
-use crate::ComplexField;
+use crate::ComplexScalar;
 pub mod eig;
 
 /// Type of QObj
@@ -21,7 +21,7 @@ pub enum QOpType{
 
 /// Trait implementing all common operations of a quantum object
 /// In general, this includes any linear operations
-pub trait QObj<N: ComplexField> :
+pub trait QObj<N: ComplexScalar> :
 Sized + Clone +
     //for<'b> AddAssign<&'b Self> +
     //for<'b> SubAssign<&'b Self>
@@ -48,7 +48,7 @@ Sized + Clone +
 /// Quantum Representation Trait
 /// Implemented for zero-size/small structures to define how to perform
 /// certain quantum operations in the given representation.
-pub trait QRep <N: ComplexField>: Sized{
+pub trait QRep <N: ComplexScalar>: Sized{
     type KetRep:    QKet<N, Rep=Self>;
     type BraRep:    QBra<N, Rep=Self>;
     type OpRep:     QOp<N, Rep=Self>;
@@ -101,7 +101,7 @@ pub trait QRep <N: ComplexField>: Sized{
 
 /// Trait for explicitly finite-dimensional quantum representations
 ///
-pub trait FDimQRep<N: ComplexField, Arr>
+pub trait FDimQRep<N: ComplexScalar, Arr>
 : QRep<N>
     where
 {
@@ -112,8 +112,8 @@ pub trait FDimQRep<N: ComplexField, Arr>
 }
 
 pub trait QRepFunctor<N1, N2, Q1, Q2>
-where   N1: ComplexField, Q1: QRep<N1>,
-        N2: ComplexField, Q2: QRep<N2>
+where   N1: ComplexScalar, Q1: QRep<N1>,
+        N2: ComplexScalar, Q2: QRep<N2>
 {
     fn map_ket(q1_ket: Q1::KetRep) -> Q2::KetRep;
     fn map_bra(q1_bra: Q1::BraRep) -> Q2::BraRep;
@@ -121,14 +121,14 @@ where   N1: ComplexField, Q1: QRep<N1>,
 }
 
 
-pub trait TensorProd<N: ComplexField, RHS=Self> : QObj<N>{
+pub trait TensorProd<N: ComplexScalar, RHS=Self> : QObj<N>{
     type Result: QObj<N>;
 
     fn tensor(a: Self, b: RHS) -> Self::Result;
     fn tensor_ref(a: &Self, b: &RHS) -> Self::Result;
 }
 
-pub trait QKet<N: ComplexField>: QObj<N>
+pub trait QKet<N: ComplexScalar>: QObj<N>
     where Self::Rep : QRep<N, KetRep=Self>
 {
     //type Rep: QRep<N, KetRep=Self>;
@@ -144,7 +144,7 @@ pub trait QKet<N: ComplexField>: QObj<N>
 
 }
 
-pub trait QBra<N: ComplexField>: QObj<N>
+pub trait QBra<N: ComplexScalar>: QObj<N>
     where Self::Rep : QRep<N, BraRep=Self>
 {
     //type Rep: QRep<N, BraRep=Self>;
@@ -156,7 +156,7 @@ pub trait QBra<N: ComplexField>: QObj<N>
 }
 
 
-pub trait QOp<N: ComplexField> : QObj<N>
+pub trait QOp<N: ComplexScalar> : QObj<N>
     where
         Self::Rep : QRep<N, OpRep=Self>
 {
@@ -172,7 +172,7 @@ pub trait QOp<N: ComplexField> : QObj<N>
 }
 
 pub fn qdot<QB, QK, QR, N>(bra: &QB, ket: &QK) -> N
-    where N: ComplexField,
+    where N: ComplexScalar,
           QR: QRep<N, KetRep=QK, BraRep=QB>,
           QB: QBra<N, Rep=QR>,
           QK: QKet<N, Rep=QR>
@@ -194,7 +194,7 @@ impl<Q: Clone> From<Q> for ConjugatingWrapper<Q>{
 }
 
 
-impl<N: ComplexField, Q> QObj<N> for ConjugatingWrapper<Q>
+impl<N: ComplexScalar, Q> QObj<N> for ConjugatingWrapper<Q>
 where Q: QObj<N>{
     type Rep = Q::Rep;
     type Dims = Q::Dims;

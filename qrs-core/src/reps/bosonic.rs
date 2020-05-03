@@ -4,7 +4,7 @@ use std::collections::btree_map::{BTreeMap, Entry};
 use crate::algebra::free_algebra::{DynFreeAlgebra, DynVectorSpace, DynVectorSpaceZero, DynAlgebraOne};
 use std::iter::FromIterator;
 use crate::quantum::{QObj, QType, QRep, ConjugatingWrapper, QOpType, QKet, QBra, QOp};
-use crate::ComplexField;
+use crate::ComplexScalar;
 use std::marker::PhantomData;
 
 //use num_traits::{Zero, One};
@@ -98,11 +98,11 @@ impl NormalBosonic{
         self.apply_to_basis_ket(u)
     }
 
-    pub fn apply_to_ket<T: ComplexField>(&self, mut u: BosonicKet<T>) -> BosonicKet<T>{
+    pub fn apply_to_ket<T: ComplexScalar>(&self, mut u: BosonicKet<T>) -> BosonicKet<T>{
         u.linear_map(&|ui| self.apply_to_basis_ket(ui), &|t| t)
     }
 
-    pub fn apply_to_ket_ref<T: ComplexField>(&self, u: &BosonicKet<T>) -> BosonicKet<T>{
+    pub fn apply_to_ket_ref<T: ComplexScalar>(&self, u: &BosonicKet<T>) -> BosonicKet<T>{
         u.linear_map_ref(&|ui| self.apply_to_basis_ket_ref(ui), &|&t| t)
     }
 
@@ -245,7 +245,7 @@ pub struct BosonicQRep<T>{
     _phantom: PhantomData<T>
 }
 
-impl<T: ComplexField> QRep<T> for BosonicQRep<T>{
+impl<T: ComplexScalar> QRep<T> for BosonicQRep<T>{
     type KetRep = BosonicKet<T>;
     type BraRep = BosonicBra<T>;
     type OpRep = BosonicOp<T>;
@@ -284,7 +284,7 @@ impl<T: ComplexField> QRep<T> for BosonicQRep<T>{
     }
 }
 
-impl<T: ComplexField> QObj<T> for BosonicKet<T>{
+impl<T: ComplexScalar> QObj<T> for BosonicKet<T>{
     type Rep = BosonicQRep<T>;
     type Dims = ();
 
@@ -312,10 +312,10 @@ impl<T: ComplexField> QObj<T> for BosonicKet<T>{
     }
 }
 
-impl<T: ComplexField> QKet<T> for BosonicKet<T> { }
-impl<T: ComplexField> QBra<T> for BosonicBra<T> { }
+impl<T: ComplexScalar> QKet<T> for BosonicKet<T> { }
+impl<T: ComplexScalar> QBra<T> for BosonicBra<T> { }
 
-impl<T: ComplexField> QObj<T> for BosonicOp<T>{
+impl<T: ComplexScalar> QObj<T> for BosonicOp<T>{
     type Rep = BosonicQRep<T>;
     type Dims = ();
 
@@ -343,7 +343,7 @@ impl<T: ComplexField> QObj<T> for BosonicOp<T>{
     }
 }
 
-impl<T: ComplexField> QOp<T> for BosonicOp<T>{ }
+impl<T: ComplexScalar> QOp<T> for BosonicOp<T>{ }
 
 #[cfg(test)]
 mod tests{

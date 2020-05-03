@@ -26,6 +26,9 @@ use crate::util::degen::{handle_degeneracies, degeneracy_detect,
                          handle_degeneracies_relative_vals};
 use crate::util::diff::four_point_gl;
 use crate::ComplexScalar;
+
+pub trait Scalar : ComplexScalar + LapackScalar { }
+impl<N> Scalar for N where N: ComplexScalar + LapackScalar{ }
 //use alga::linear::NormedSpace;
 
 static AME_DIS_KINETIC_SCALE_LIM : f64 = 5.0e-1;
@@ -44,7 +47,7 @@ type AdiabaticMEExpSplit<T> = SemiComplexO4ExpSplit<T, Complex<T>, Op<Complex<T>
 type AdiabaticMEL<T> = <AdiabaticMEExpSplit<T> as ExponentialSplit<T, Complex<T>, Op<Complex<T>>>>::L;
 
 fn make_ame_split<T: RealScalar + Float>(n: u32) -> AdiabaticMEExpSplit<T>
-where Complex<T> : ComplexScalar<R=T>
+where Complex<T> : Scalar<R=T>
 {
     let split = AdiabaticMEExpSplit::<T>::new(
         AMEHamiltonianSplit::new(
@@ -121,7 +124,7 @@ fn ame_liouvillian<R: RealScalar, B: Bath<R>>(
     lind_coh: &mut DMatrix<Complex<R>>,
     lindblad_ops: &Vec<DMatrix<Complex<R>>>
 )
-where Complex<R> : ComplexScalar<R=R>
+where Complex<R> : Scalar<R=R>
 {
     assert_eq!(lindblad_ops.len(), work.linds_ab.len(), "Number of lindblad operators mismatched");
     let one_half = R::from_subset(&(0.5_f64));
@@ -461,8 +464,10 @@ impl<'a, B: Bath<f64>> AME<'a, B> {
         let mut w_dot = w2;
         w_dot -= w1;
         //w_dot *= Complex::from(1.0/(2.0 * dt));
-        w_dot.scalar_multiply_to(-Complex::<f64>::i() * Complex::from(1.0/(2.0 * dt)),
-                                 &mut self.diab_k);
+        LC::scalar_multiply_to(&w_dot, -Complex::<f64>::i() * Complex::from(1.0/(2.0 * dt)),
+                                       &mut self.diab_k);
+        // w_dot.scalar_multiply_to(-Complex::<f64>::i() * Complex::from(1.0/(2.0 * dt)),
+        //                          &mut self.diab_k);
         //self.eigvecs.ad_mul_to(&w_dot, &mut self.diab_k);
         //self.diab_k *= -Complex::i();
 

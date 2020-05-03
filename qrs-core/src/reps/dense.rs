@@ -1,7 +1,8 @@
 use crate::quantum::*;
 use crate::util::array::kronecker;
 
-use crate::{RealField, ComplexField};
+//use crate::{RealField, ComplexField};
+//use ndarray_linalg::Scalar;
 use num_traits::{Zero, Float};
 use num_complex::Complex;
 use ndarray::prelude::*;
@@ -9,23 +10,26 @@ use vec_ode::LinearCombination;
 //use ndarray_linalg::eigh::Eigh;
 
 use std::marker::PhantomData;
-use crate::ComplexScalar;
 use ndarray_linalg::UPLO;
+
+pub trait Scalar : ndarray_linalg::Scalar + crate::ComplexScalar
+{ }
+impl<N> Scalar for N where N: ndarray_linalg::Scalar + crate::ComplexScalar { }
 
 pub type Ket<N> = Array1<N>;
 pub type Bra<N> = ConjugatingWrapper<Array1<N>>;
 pub type Op<N> =  Array2<N>;
 
 pub struct DenseQRep<N>
-    where N: ComplexScalar
+    where N: Scalar
 { _phantom: PhantomData<N> }
 
-pub struct LC<N> where N: ComplexScalar{
+pub struct LC<N> where N: Scalar{
     _phantom: PhantomData<N>
 }
 
-impl<N: ComplexScalar > QRep<N> for DenseQRep<N>
-//where Complex<R>: ComplexScalar<R>
+impl<N: Scalar > QRep<N> for DenseQRep<N>
+//where Complex<R>: Scalar<R>
 {
     type KetRep = Ket<N>;
     type BraRep = Bra<N>;
@@ -82,7 +86,7 @@ impl<N: ComplexScalar > QRep<N> for DenseQRep<N>
 
 }
 
-// impl<N: ComplexScalar > EigQRep<N> for DenseQRep<N>
+// impl<N: Scalar > EigQRep<N> for DenseQRep<N>
 //     where N: ComplexField<RealField=<N as cauchy::Scalar>::Real>,
 //         <N as cauchy::Scalar>::Real : RealField
 // {
@@ -94,12 +98,13 @@ impl<N: ComplexScalar > QRep<N> for DenseQRep<N>
 // }
 
 impl<N, S, D> LinearCombination<N, ArrayBase<S, D>> for LC<N>
-where   N: ComplexScalar,
+where   N: Scalar,
         S: ndarray::DataMut<Elem=N>,
         D: ndarray::Dimension
 {
     fn scale(v: &mut ArrayBase<S, D>, k: N) {
-        *v *= k;
+        v.map_inplace(|vi| *vi *= k);
+       //*v *= k;
     }
 
     fn scalar_multiply_to(v: &ArrayBase<S, D>, k: N, target: &mut ArrayBase<S, D>) {
@@ -120,7 +125,7 @@ where   N: ComplexScalar,
 }
 
 impl<
-    N: ComplexScalar>
+    N: Scalar>
 QObj<N>
 for Array2<N>
 {
@@ -162,7 +167,7 @@ for Array2<N>
     }
 }
 impl<
-    N: ComplexScalar >
+    N: Scalar >
 QObj<N>
 for Array1<N>
 {
@@ -194,7 +199,7 @@ for Array1<N>
     }
 }
 
-impl<N: ComplexScalar>
+impl<N: Scalar>
 TensorProd<N, Op<N> >
 for Op<N>
 {
@@ -209,7 +214,7 @@ for Op<N>
     }
 }
 
-pub fn tensor_list<N: ComplexScalar>(ops: &[ Op<N>]) -> Op<N>{
+pub fn tensor_list<N: Scalar>(ops: &[ Op<N>]) -> Op<N>{
     if ops.len() == 0{
         panic!("tensor_list Op slice cannot be empty");
     }
@@ -222,7 +227,7 @@ pub fn tensor_list<N: ComplexScalar>(ops: &[ Op<N>]) -> Op<N>{
     v
 }
 
-impl<N: ComplexScalar>
+impl<N: Scalar>
 TensorProd<N, Ket<N>>
 for Ket<N>{
     type Result = Ket<N>;
@@ -239,7 +244,7 @@ for Ket<N>{
     }
 }
 
-impl<N: ComplexScalar>
+impl<N: Scalar>
 TensorProd<N, Bra<N>>
 for Bra<N>{
     type Result = Bra<N>;
@@ -253,17 +258,17 @@ for Bra<N>{
     }
 }
 
-impl<N: ComplexScalar> QOp<N> for Op<N>
+impl<N: Scalar> QOp<N> for Op<N>
 {
     //type Rep = DenseQRep<N>;
 }
 
-impl<N: ComplexScalar> QKet<N> for Ket<N>
+impl<N: Scalar> QKet<N> for Ket<N>
 {
     //type Rep = DenseQRep<N>;
 }
 
-impl<N: ComplexScalar> QBra<N> for Bra<N>
+impl<N: Scalar> QBra<N> for Bra<N>
 {
     //type Rep = DenseQRep<N>;
 }

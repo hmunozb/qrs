@@ -1,15 +1,17 @@
 use crate::ComplexScalar;
 use lapacke::Layout;
-use lapack_traits::Theevx;
+use lapack_traits::LapackScalar;
 use nalgebra::{DMatrix, DVector, DMatrixSlice};
 use num_traits::{Zero, One};
-use crate::quantum::eig::{QEiger, EigRange, EigJob};
+use crate::eig::{QEiger, EigQRep, EigRange, EigJob};
 use crate::reps::matrix::{DenseQRep, Op};
 use crate::eig::dense::{EigResolver, EigRangeData};
 use crate::quantum::{QRep, QObj};
-use crate::quantum::eig::EigQRep;
 
-impl<N: ComplexScalar> QEiger<N, DenseQRep<N>>
+pub trait EigScalar: ComplexScalar + LapackScalar { }
+impl<N> EigScalar for N where N: ComplexScalar + LapackScalar{ }
+
+impl<N: ComplexScalar+LapackScalar> QEiger<N, DenseQRep<N>>
 for EigResolver<N>{
     fn make_eiger(shape: <Op<N> as QObj<N>>::Dims, job: EigJob, range: EigRange<<N as ComplexScalar>::R>) -> Self {
         assert_eq!(shape.0, shape.1);
@@ -32,7 +34,7 @@ for EigResolver<N>{
 
 }
 
-impl<N: ComplexScalar> EigQRep<N> for DenseQRep<N>{
+impl<N: ComplexScalar+LapackScalar> EigQRep<N> for DenseQRep<N>{
     fn eig(op: &Op<N>) -> (Vec<N::R>, Self::OpRep) {
         let mut eiger : EigResolver<N> = QEiger::<N, DenseQRep<N>>::make_eiger(op.qdim(), EigJob::ValsVecs, EigRange::All);
         let mat = eiger.borrow_matrix();
