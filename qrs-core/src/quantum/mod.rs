@@ -1,5 +1,5 @@
-use std::ops::{AddAssign, SubAssign, Index, IndexMut};
 use crate::ComplexScalar;
+
 pub mod eig;
 
 /// Type of QObj

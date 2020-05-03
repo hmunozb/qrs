@@ -1,12 +1,12 @@
-use crate::ComplexScalar;
-use lapacke::Layout;
 use lapack_traits::LapackScalar;
-use nalgebra::{DMatrix, DVector, DMatrixSlice};
-use num_traits::{Zero, One};
-use crate::eig::{QEiger, EigQRep, EigRange, EigJob};
+use lapacke::Layout;
+use nalgebra::{DMatrix};
+
+use crate::ComplexScalar;
+use crate::eig::{EigJob, EigQRep, EigRange, QEiger};
+use crate::eig::dense::{EigRangeData, EigResolver};
+use crate::quantum::{QObj};
 use crate::reps::matrix::{DenseQRep, Op};
-use crate::eig::dense::{EigResolver, EigRangeData};
-use crate::quantum::{QRep, QObj};
 
 pub trait EigScalar: ComplexScalar + LapackScalar { }
 impl<N> EigScalar for N where N: ComplexScalar + LapackScalar{ }

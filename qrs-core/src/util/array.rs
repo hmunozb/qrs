@@ -3,11 +3,10 @@ use itertools::Itertools;
 use lapack_traits::LapackScalar;
 use ndarray::prelude::*;
 use num_complex::Complex;
-use num_traits::{Float, Zero};
+use num_traits::{Float};
 use simba::scalar::ClosedMul;
 
 use crate::{ComplexField, RealField};
-use crate::ComplexScalar;
 
 /// Computes
 /// out[i, j] = f( a[i], b[j] )

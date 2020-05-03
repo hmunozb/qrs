@@ -1,11 +1,10 @@
-
-
 use std::collections::btree_map::{BTreeMap, Entry};
-use crate::algebra::free_algebra::{DynFreeAlgebra, DynVectorSpace, DynVectorSpaceZero, DynAlgebraOne};
 use std::iter::FromIterator;
-use crate::quantum::{QObj, QType, QRep, ConjugatingWrapper, QOpType, QKet, QBra, QOp};
-use crate::ComplexScalar;
 use std::marker::PhantomData;
+
+use crate::algebra::free_algebra::{DynAlgebraOne, DynFreeAlgebra, DynVectorSpace, DynVectorSpaceZero};
+use crate::ComplexScalar;
+use crate::quantum::{ConjugatingWrapper, QBra, QKet, QObj, QOp, QOpType, QRep, QType};
 
 //use num_traits::{Zero, One};
 

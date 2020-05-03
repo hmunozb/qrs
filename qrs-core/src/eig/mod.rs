@@ -1,8 +1,10 @@
+use num_traits::real::Real;
+
+use crate::ComplexScalar;
+use crate::quantum::{QObj, QRep};
+
 pub mod dense;
 pub mod dmatrix;
-use num_traits::real::Real;
-use crate::quantum::{QRep, QObj};
-use crate::ComplexScalar;
 
 #[derive(Copy,Clone)]
 pub enum EigJob{

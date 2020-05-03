@@ -1,14 +1,15 @@
-use crate::{RealScalar, ComplexScalar, SupersetOf};
+use lapack_traits::{LapackScalar};
 //use alga::general::{RealScalar, ComplexScalar, SupersetOf};
 //use ndarray_linalg::Scalar;
 use lapacke::Layout;
-use lapack_traits::{Theevx, LapackScalar};
 use ndarray::prelude::*;
-use num_traits::{Zero, One, ToPrimitive};
-use crate::reps::dense::*;
-use crate::eig::{EigRange, EigJob, QEiger, EigQRep};
-use crate::quantum::*;
+use num_traits::{One, ToPrimitive, Zero};
 use num_traits::real::Real;
+
+use crate::{ComplexScalar};
+use crate::eig::{EigJob, EigQRep, EigRange, QEiger};
+use crate::quantum::*;
+use crate::reps::dense::*;
 
 pub trait EigScalar: crate::reps::dense::Scalar + LapackScalar{ }
 impl<N> EigScalar for N where N : crate::reps::dense::Scalar + LapackScalar { }

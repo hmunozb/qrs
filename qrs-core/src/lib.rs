@@ -1,4 +1,3 @@
-#![allow(unused_imports)]
 #![allow(unused_variables)]
 #![allow(unused_mut)]
 #![allow(dead_code)]
@@ -13,9 +12,6 @@ pub mod reps;
 pub mod util;
 
 pub use simba::scalar::{RealField, ComplexField, SubsetOf, SupersetOf, ClosedAdd, ClosedMul};
-//use alga::general::{RealField, ComplexField};
-use lapack_traits::LapackScalar;
-use num_traits::{Float, NumOps, ToPrimitive};
 
 pub use nalgebra::{SimdComplexField, SimdRealField};
 

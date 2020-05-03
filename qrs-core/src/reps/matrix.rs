@@ -1,12 +1,14 @@
-use crate::quantum::*;
-//use crate::eig::{EigResolver, EigJob, EigRangeData};
-use crate::{ComplexScalar};
-//use num_complex::Complex;
-use nalgebra::{Matrix, DVector, DMatrix};
-use nalgebra::{Dim};
-use nalgebra::base::storage::{StorageMut};
 use std::marker::PhantomData;
+
+//use num_complex::Complex;
+use nalgebra::{DMatrix, DVector, Matrix};
+use nalgebra::Dim;
+use nalgebra::base::storage::StorageMut;
 use vec_ode::LinearCombination;
+
+//use crate::eig::{EigResolver, EigJob, EigRangeData};
+use crate::ComplexScalar;
+use crate::quantum::*;
 
 pub type Ket<N> = DVector<N>;
 pub type Bra<N> = DVector<N>;
@@ -233,8 +235,10 @@ impl<N: ComplexScalar> QBra<N> for Bra<N>
 
 #[cfg(test)]
 mod tests{
-    use super::{Bra, Ket, QKet, QBra};
     use crate::quantum::qdot;
+
+    use super::{Bra, Ket, QBra, QKet};
+
     #[test]
     fn test_dense_qrep(){
         let a : Bra<f64> = Bra::zeros(3);

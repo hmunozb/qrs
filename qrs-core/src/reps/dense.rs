@@ -1,16 +1,12 @@
+use std::marker::PhantomData;
+
+use ndarray::prelude::*;
+use vec_ode::LinearCombination;
+
 use crate::quantum::*;
 use crate::util::array::kronecker;
 
-//use crate::{RealField, ComplexField};
-//use ndarray_linalg::Scalar;
-use num_traits::{Zero, Float};
-use num_complex::Complex;
-use ndarray::prelude::*;
-use vec_ode::LinearCombination;
 //use ndarray_linalg::eigh::Eigh;
-
-use std::marker::PhantomData;
-use ndarray_linalg::UPLO;
 
 pub trait Scalar : ndarray_linalg::Scalar + crate::ComplexScalar
 { }
@@ -276,8 +272,10 @@ impl<N: Scalar> QBra<N> for Bra<N>
 
 #[cfg(test)]
 mod tests{
-    use super::{Bra, Ket, QKet, QBra};
     use crate::quantum::qdot;
+
+    use super::{Bra, Ket, QBra, QKet};
+
     #[test]
     fn test_dense_qrep(){
         let a : Bra<f64> = Bra::from(Ket::zeros(3));

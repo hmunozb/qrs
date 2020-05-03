@@ -1,13 +1,14 @@
-use crate::{ClosedMul, ClosedAdd};
-//use num_traits::{Zero, One};
-use std::ops::{Add, Mul, AddAssign, DerefMut, MulAssign};
+
+use std::borrow::BorrowMut;
 use std::boxed::Box;
 use std::marker::PhantomData;
 use std::mem;
-//use crate::algebra::algebra::{Algebra};
-use std::borrow::BorrowMut;
+
+use std::ops::{Add, AddAssign, DerefMut, Mul, MulAssign};
+
 use num_traits::{One, Zero};
 
+use crate::{ClosedAdd, ClosedMul};
 
 trait FreeExpression<S>{
     fn into_object(self) -> S;
