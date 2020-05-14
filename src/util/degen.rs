@@ -166,20 +166,6 @@ where R: RealScalar, Complex<R>: ComplexScalar+LapackScalar
         vecs.columns_mut(i0, k).copy_from(&w_rot_deg);
 
     }
-    // We re-orthonormolize every group of degenerate eigenstates
-//    for di in degens{
-//        let i0 = di[0];
-//        let k = di.len();
-//
-//        let w = vecs.slice((i0, i0), (k, k));
-//        let mut w = w.into_owned();
-//        w.adjoint_mut();
-//        gram_schmidt_ortho(&mut w);
-//
-//        let old_vs = vecs.columns(i0, k).into_owned();
-//        let mut vs = vecs.columns_mut(i0, k);
-//        old_vs.mul_to(&w, &mut vs);
-//    }
 }
 
 /// Handle the phases of a matrix by naively setting the largest element to be a

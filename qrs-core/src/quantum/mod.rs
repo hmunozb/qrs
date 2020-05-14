@@ -1,4 +1,5 @@
 use crate::ComplexScalar;
+use std::ops::Index;
 
 pub mod eig;
 
@@ -101,14 +102,14 @@ pub trait QRep <N: ComplexScalar>: Clone{
 
 /// Trait for explicitly finite-dimensional quantum representations
 ///
-pub trait FDimQRep<N: ComplexScalar, Arr>
+pub trait FDimQRep<N: ComplexScalar, Idx: ?Sized>
 : QRep<N>
     where
 {
-    type KetBasis;
+    type KetBasis : Index<Idx, Output=Self::KetRep>;
 
     fn qstack(kets: Self::KetBasis) -> Self::OpRep;
-
+    fn qunstack(op: Self::OpRep) -> Self::KetBasis;
 }
 
 pub trait QRepFunctor<N1, N2, Q1, Q2>

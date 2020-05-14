@@ -13,8 +13,10 @@ pub use qrs_core::{ComplexField, RealField};
 pub use qrs_core::{ComplexScalar, RealScalar};
 
 pub mod util;
+pub mod adiab;
 pub mod algebra;
 pub mod base;
 pub mod oqs;
 pub mod ode;
 pub mod semi;
+pub mod therm;
