@@ -9,7 +9,7 @@ use num_complex::Complex;
 use num_traits::{One, ToPrimitive, Zero};
 use num_traits::Float;
 
-use qrs_core::eig::{EigJob, EigQRep};
+use qrs_core::eig::{EigJob, EigQRep, EigRange};
 use qrs_core::eig::dmatrix::EigScalar;
 //use qrs_core::reps::dense::{DenseQRep, Op};
 use qrs_core::eig::QEiger;
@@ -17,7 +17,7 @@ use qrs_core::reps::matrix::{DenseQRep, Op};
 
 //use crate::util::degen::{handle_degeneracies_vals, handle_phases, degeneracy_detect, handle_degeneracies};
 use crate::{ComplexScalar, RealScalar};
-use crate::util::{EigRangeData, EigResolver, TimeDependentOperator};
+use crate::util::{EigResolver, TimeDependentOperator};
 //use qrs_core::util::array::{change_basis};
 use crate::util::change_basis;
 use crate::util::time_dep_op::TimeDepMatrix;
@@ -109,9 +109,10 @@ where R: RealScalar + Float,  Complex<R>: EigScalar<R=R>
     /// Construct the truncated Hamiltonian sequence over the midpoints of each partition
     fn construct_sequence(&mut self) {
         let n = self.haml.shape().0;
-        let mut eiger: EigResolver<Complex<R>> = EigResolver::new_eiger(
-            n as u32, EigJob::ValsVecs,
-                  EigRangeData::idx_range(0, self.basis_size as i32));
+
+        let mut eiger: EigResolver<Complex<R>> =  QEiger::<Complex<R>, DenseQRep<Complex<R>>>
+            ::make_eiger((n, n), EigJob::ValsVecs,
+                     EigRange::IdxRange(0, self.basis_size as i32));
 
         for &t in self.partition_midpoints.iter() {
             let (_vals, vecs) = QEiger::<Complex<R>, DenseQRep<Complex<R>>>::eigh(&mut eiger,
@@ -172,9 +173,11 @@ where R: RealScalar + Float,  Complex<R>: EigScalar<R=R>
         let id_diagonal: DVector<Complex<R>> = DVector::from_fn(
             self.basis_size as usize, |i, _| if i < strength { Complex::one() } else { Complex::zero() });
         let id0: DMatrix<Complex<R>> = DMatrix::from_diagonal(&id_diagonal);
-        let mut eiger: EigResolver<Complex<R>> = EigResolver::new_eiger(
-            n as u32, EigJob::ValsVecs,
-            EigRangeData::idx_range(0, self.basis_size as i32));
+        let mut eiger: EigResolver<Complex<R>> =  QEiger::<Complex<R>, DenseQRep<Complex<R>>>
+                ::make_eiger((n, n), EigJob::ValsVecs, EigRange::IdxRange(0, self.basis_size as i32));
+            // EigResolver::new_eiger(
+            // n as u32, EigJob::ValsVecs,
+            // EigRangeData::idx_range(0, self.basis_size as i32));
 
         let mut get_eigs = |t: &R| -> Op<Complex<R>>{
             let ht = self.haml.eval(*t);

@@ -42,3 +42,11 @@ pub trait QEiger<N: ComplexScalar, Q> where Q: QRep<N>{
     fn make_eiger(shape: <Q::OpRep as QObj<N>>::Dims, job: EigJob, range: EigRange<N::R>) -> Self;
     fn eigh(&mut self, op: &Q::OpRep) -> (Vec<N::R>, Self::EigVecT );
 }
+
+pub struct GenericEigResolver<E>{
+    data_eiger: E
+}
+
+impl<E> GenericEigResolver<E>{
+
+}
