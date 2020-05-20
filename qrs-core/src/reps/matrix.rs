@@ -237,7 +237,7 @@ impl<N: ComplexScalar> QBra<N> for Bra<N>
 mod tests{
     use crate::quantum::qdot;
 
-    use super::{Bra, Ket, QBra, QKet};
+    use super::{Bra, Ket, QBra};
 
     #[test]
     fn test_dense_qrep(){

@@ -4,7 +4,9 @@ use ndarray::prelude::*;
 use vec_ode::LinearCombination;
 
 use crate::quantum::*;
-use crate::util::array::kronecker;
+use crate::util::array::{kronecker, gemm, change_basis};
+//use ndarray_linalg::{QR, Lapack};
+use lapack_traits::LapackScalar;
 
 //use ndarray_linalg::eigh::Eigh;
 
@@ -270,11 +272,51 @@ impl<N: Scalar> QBra<N> for Bra<N>
     //type Rep = DenseQRep<N>;
 }
 
+
+
+pub struct ProjectiveFunctor<N: Scalar, Q: QRep<N>>{
+    p: Q::OpRep,
+    _q: Q
+}
+
+impl<N: Scalar+LapackScalar> QRepFunctor<N, N, DenseQRep<N>,  DenseQRep<N>>
+for ProjectiveFunctor<N, DenseQRep<N>>{
+    fn map_ket(&self, q1_ket: &Ket<N>) -> Ket<N>{
+        use cblas::Transpose;
+        let n = q1_ket.len();
+        let b = q1_ket.view().into_shape([n, 1]).unwrap();
+        let mut y = b.clone().into_owned();
+        gemm(&mut y, self.p.view(), b, Transpose::Ordinary, Transpose::Ordinary);
+        let y = y.into_shape([n,]).unwrap();
+        y
+    }
+
+    fn map_bra(&self, q1_bra: &Bra<N>) -> Bra<N>{
+        use cblas::Transpose;
+        let n = q1_bra.q.len();
+        let q2 = q1_bra.q.clone();
+        let mut c = q2.into_shape([n, 1usize]).unwrap();
+        let a  = q1_bra.q.view().into_shape([n, 1usize]).unwrap();
+        let b = self.p.view();
+        gemm(&mut c, a, b,
+             Transpose::Ordinary, Transpose::Ordinary);
+        let q = c.into_shape([n,]).unwrap();
+        let q2_bra : Bra<N> = ConjugatingWrapper::from(q);
+
+        q2_bra
+
+    }
+
+    fn map_op(&self, q1_op: &Op<N>) -> Op<N>{
+        change_basis(q1_op.view(), self.p.view())
+    }
+}
+
 #[cfg(test)]
 mod tests{
     use crate::quantum::qdot;
 
-    use super::{Bra, Ket, QBra, QKet};
+    use super::{Bra, Ket, QBra};
 
     #[test]
     fn test_dense_qrep(){

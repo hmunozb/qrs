@@ -3,7 +3,7 @@ use ndarray_stats::QuantileExt;
 use num_traits::real::Real;
 use qrs_core::ComplexScalar;
 use qrs_core::quantum::{QRep, FDimQRep, QOp};
-use qrs_core::eig::QEiger;
+use qrs_core::eig::{QEiger, EigVecResult};
 use qrs_core::util::iter::Sum;
 
 
@@ -32,7 +32,7 @@ where N::R : Real
     vals.mapv_inplace(|x| Real::exp(-beta * x ));
     let z_partfn = vals.sum();
 
-    GibbsResult{boltz_weights: vals, partition_z: z_partfn, evecs: vecs}
+    GibbsResult{boltz_weights: vals, partition_z: z_partfn, evecs: vecs.into_op()}
 
 }
 

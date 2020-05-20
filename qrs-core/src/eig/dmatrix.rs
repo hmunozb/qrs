@@ -3,16 +3,34 @@ use lapacke::Layout;
 use nalgebra::{DMatrix};
 
 use crate::ComplexScalar;
-use crate::eig::{EigJob, EigQRep, EigRange, QEiger};
+use crate::eig::{EigJob, EigQRep, EigRange, QEiger, EigVecResult};
 use crate::eig::dense::{EigRangeData, EigResolver};
 use crate::quantum::{QObj};
-use crate::reps::matrix::{DenseQRep, Op};
+use crate::reps::matrix::{DenseQRep, Op, Ket};
 
 pub trait EigScalar: ComplexScalar + LapackScalar { }
 impl<N> EigScalar for N where N: ComplexScalar + LapackScalar{ }
 
+
+impl<N: ComplexScalar> EigVecResult<N, DenseQRep<N>> for Op<N>{
+    fn into_op(self) -> Op<N> {
+        self
+    }
+
+    fn into_kets(self) -> Vec<Ket<N>> {
+        let mut v = Vec::with_capacity(self.ncols());
+        for col in self.column_iter(){
+            v.push(col.into_owned());
+        }
+
+        v
+    }
+}
+
 impl<N: ComplexScalar+LapackScalar> QEiger<N, DenseQRep<N>>
 for EigResolver<N>{
+
+    type EigVecT = Op<N>;
     fn make_eiger(shape: <Op<N> as QObj<N>>::Dims, job: EigJob, range: EigRange<<N as ComplexScalar>::R>) -> Self {
         assert_eq!(shape.0, shape.1);
 
@@ -35,7 +53,9 @@ for EigResolver<N>{
 }
 
 impl<N: ComplexScalar+LapackScalar> EigQRep<N> for DenseQRep<N>{
-    fn eig(op: &Op<N>) -> (Vec<N::R>, Self::OpRep) {
+    type EigVecT = Op<N>;
+
+    fn eig(op: &Op<N>) -> (Vec<N::R>, Op<N>) {
         let mut eiger : EigResolver<N> = QEiger::<N, DenseQRep<N>>::make_eiger(op.qdim(), EigJob::ValsVecs, EigRange::All);
         let mat = eiger.borrow_matrix();
         let sl: &mut [N]  = mat.as_slice_mut().unwrap();

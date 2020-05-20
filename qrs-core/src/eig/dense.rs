@@ -7,12 +7,27 @@ use num_traits::{One, ToPrimitive, Zero};
 use num_traits::real::Real;
 
 use crate::{ComplexScalar};
-use crate::eig::{EigJob, EigQRep, EigRange, QEiger};
+use crate::eig::{EigJob, EigQRep, EigRange, QEiger, EigVecResult};
 use crate::quantum::*;
 use crate::reps::dense::*;
 
 pub trait EigScalar: crate::reps::dense::Scalar + LapackScalar{ }
 impl<N> EigScalar for N where N : crate::reps::dense::Scalar + LapackScalar { }
+
+impl<N: EigScalar> EigVecResult<N, DenseQRep<N>> for Op<N>{
+    fn into_op(self) -> Op<N> {
+        self
+    }
+
+    fn into_kets(self) -> Vec<Ket<N>> {
+        let mut v = Vec::with_capacity(self.ncols());
+        for col in self.gencolumns(){
+            v.push(col.into_owned());
+        }
+
+        v
+    }
+}
 
 #[derive(Copy,Clone)]
 pub struct EigRangeData<F: Real>{
@@ -223,6 +238,7 @@ impl<N: ComplexScalar+LapackScalar> EigResolver<N>
         let iwork = workpad.iwork.as_mut_slice();
         let rwork = workpad.rwork.as_mut_slice();
         let ifail = workpad.ifail.as_mut_slice();
+        let ldz = if er.layout == Layout::RowMajor { m } else { n };
 
         let mut m = 0;
         let info = unsafe{
@@ -248,6 +264,8 @@ impl<N: ComplexScalar+LapackScalar> EigResolver<N>
 }
 
 impl<N: Scalar + LapackScalar> QEiger<N, DenseQRep<N>> for EigResolver<N>{
+    type EigVecT = Op<N>;
+
     fn make_eiger(shape: (usize, usize), job: EigJob, range: EigRange<N::R>) -> Self {
         assert_eq!(shape.0, shape.1);
 
@@ -265,7 +283,9 @@ impl<N: Scalar + LapackScalar> QEiger<N, DenseQRep<N>> for EigResolver<N>{
 }
 
 impl<N: Scalar + LapackScalar> EigQRep<N> for DenseQRep<N>{
-    fn eig(op: &Op<N>) -> (Vec<N::R>, Self::OpRep) {
+    type EigVecT = Op<N>;
+
+    fn eig(op: &Op<N>) -> (Vec<N::R>, Op<N>) {
         let mut eiger : EigResolver<N> = QEiger::<N, DenseQRep<N>>::make_eiger(op.qdim(), EigJob::ValsVecs, EigRange::All);
         eiger.borrow_matrix().assign(op);
         eiger.eig();

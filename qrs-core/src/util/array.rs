@@ -64,7 +64,7 @@ pub fn copy_to_complex<N>(
 }
 
 pub fn gemm<N: LapackScalar>(
-    c: &mut Array2<N>, a: &Array2<N>, b: &Array2<N>, a_t: Transpose, b_t: Transpose ){
+    c: &mut Array2<N>, a: ArrayView2<N>, b: ArrayView2<N>, a_t: Transpose, b_t: Transpose ){
     let mut a_sh = a.raw_dim();
     let mut b_sh = b.raw_dim();
     let mut c_sh = c.raw_dim();
@@ -88,7 +88,7 @@ pub fn gemm<N: LapackScalar>(
 }
 
 pub fn ad_mul_to<N: LapackScalar>(
-    a: &Array2<N>, b: &Array2<N>, c: &mut Array2<N>
+    a: ArrayView2<N>, b: ArrayView2<N>, c: &mut Array2<N>
 ){
     gemm(c, a, b, Transpose::Conjugate, Transpose::None);
 }
@@ -96,28 +96,28 @@ pub fn ad_mul_to<N: LapackScalar>(
 #[allow(non_snake_case)]
 /// Z <- U^dag A U
 pub fn change_basis_to<N: LapackScalar>(
-    A: &Array2<N>,
-    U: &Array2<N>,
+    A: ArrayView2<N>,
+    U: ArrayView2<N>,
     //_temp: &mut Array2<N>,
     out: &mut Array2<N>){
     let a_sh = A.shape();
     let u_sh = U.shape();
     let mut m1 : Array2<N> = Array2::zeros((a_sh[0], u_sh[1]));
     gemm(&mut m1, A, U, Transpose::None, Transpose::None);
-    gemm(out, U, &m1, Transpose::Conjugate, Transpose::None);
+    gemm(out, U, m1.view(), Transpose::Conjugate, Transpose::None);
 }
 
 #[allow(non_snake_case)]
 /// Performs U^dag A U
 pub fn change_basis<N: LapackScalar>(
-    A: &Array2<N>,
-    U: &Array2<N>) -> Array2<N>{
+    A: ArrayView2<N>,
+    U: ArrayView2<N>) -> Array2<N>{
     let a_sh = A.shape();
     let u_sh = U.shape();
     let mut m1 : Array2<N> = Array::zeros((a_sh[0], u_sh[1]));
     let mut m2 : Array2<N> = Array::zeros((u_sh[1], u_sh[1]));
     gemm(&mut m1, A, U, Transpose::None, Transpose::None);
-    gemm(&mut m2, U, &m1, Transpose::Conjugate, Transpose::None);
+    gemm(&mut m2, U, m1.view(), Transpose::Conjugate, Transpose::None);
     m2
     //note: threshold size for zgemm to be efficient over matrixmultiply may be above 16x16
     //U.ad_mul(&(A * U))
@@ -126,14 +126,14 @@ pub fn change_basis<N: LapackScalar>(
 #[allow(non_snake_case)]
 /// Performs U A U^dag where A is Hermitian
 pub fn unchange_basis<N: LapackScalar>(
-    A: &Array2<N>,
-    U: &Array2<N>) -> Array2<N>{
+    A: ArrayView2<N>,
+    U: ArrayView2<N>) -> Array2<N>{
     let a_sh = A.shape();
     let u_sh = U.shape();
     let mut m1 : Array2<N> = Array2::zeros((a_sh[0], u_sh[0]));
     let mut m2 : Array2<N> = Array2::zeros((u_sh[0], u_sh[0]));
     gemm(&mut m1, A, U, Transpose::None, Transpose::Conjugate);
-    gemm(&mut m2, U, &m1, Transpose::None, Transpose::None);
+    gemm(&mut m2, U, m1.view(), Transpose::None, Transpose::None);
     m2
     // U * ( A * U.adjoint())
 }

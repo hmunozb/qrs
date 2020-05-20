@@ -110,15 +110,23 @@ pub trait FDimQRep<N: ComplexScalar, Idx: ?Sized>
 
     fn qstack(kets: Self::KetBasis) -> Self::OpRep;
     fn qunstack(op: Self::OpRep) -> Self::KetBasis;
+    fn ket_from_vec(v: Vec<N>) -> Self::KetRep;
+    fn ket_from_iter<I>(it: I) -> Self::KetRep
+        where I: IntoIterator<Item=N>;
 }
 
 pub trait QRepFunctor<N1, N2, Q1, Q2>
 where   N1: ComplexScalar, Q1: QRep<N1>,
         N2: ComplexScalar, Q2: QRep<N2>
 {
-    fn map_ket(q1_ket: Q1::KetRep) -> Q2::KetRep;
-    fn map_bra(q1_bra: Q1::BraRep) -> Q2::BraRep;
-    fn map_op(q1_op: Q1::OpRep) -> Q2::OpRep;
+    fn map_ket(&self, q1_ket: &Q1::KetRep) -> Q2::KetRep;
+    fn map_bra(&self, q1_bra: &Q1::BraRep) -> Q2::BraRep;
+    fn map_op(&self, q1_op: &Q1::OpRep) -> Q2::OpRep;
+}
+
+pub struct UnitaryTransformFunctor<N: ComplexScalar, Q: QRep<N>>{
+    u: Q::OpRep,
+    _q: Q
 }
 
 

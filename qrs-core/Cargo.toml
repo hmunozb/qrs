@@ -20,6 +20,7 @@ ndarray-linalg = {version = "0.12"}
 num-complex = "0.2"
 num-traits = "0.2"
 simba = "0.1"
+sprs = "0.7"
 vec_ode = {git="https://github.com/hmunozb/vec-ode.git"}
 
 [dev-dependencies]
