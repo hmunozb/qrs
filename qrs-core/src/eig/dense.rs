@@ -239,7 +239,7 @@ impl<N: ComplexScalar+LapackScalar> EigResolver<N>
         let iwork = workpad.iwork.as_mut_slice();
         let rwork = workpad.rwork.as_mut_slice();
         let ifail = workpad.ifail.as_mut_slice();
-        let ldz = if er.layout == Layout::RowMajor { zsh.1 as i32 } else { n };
+        let ldz = if er.layout == Layout::RowMajor { zsh.0 as i32 } else { n };
 
         let mut m = 0;
         let info = unsafe{
