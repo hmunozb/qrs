@@ -1,5 +1,5 @@
 use lapack_traits::LapackScalar;
-use log::{error, info, trace, warn};
+use log::{error, info, debug, trace, warn, log_enabled};
 use nalgebra::{DMatrix, DVector};
 use ndarray::ArrayView2;
 use num_complex::Complex;
@@ -216,6 +216,9 @@ impl<'a, B: Bath<f64>> AME<'a, B> {
         for &t in t_arr.iter(){
             self.load_eigv_normal(t);
             self.adiabatic_lind();
+            if log_enabled!(log::Level::Debug) {
+                debug!("tr pauli: {}", self.lind_pauli.trace() );
+            }
 
             let dsl_lind = DirectSumL::new(self.lind_pauli.clone(), self.lind_coh.clone());
             dsl_vec.push(dsl_lind);
@@ -321,8 +324,8 @@ pub fn solve_ame<B: Bath<f64>>(
         //let mut rejects = 0;
         let mut ema_rej :f64 = 0.0;
         loop{
-            let res = solver.step();
-
+            let res = solver.step_adaptive();
+            //let res = solver.step();
             match res{
                 ODEState::Ok(step) => {
                     match step{
@@ -347,7 +350,7 @@ pub fn solve_ame<B: Bath<f64>>(
                     }
                 },
                 ODEState::Done => {
-                    trace!("Partition Done");
+                    debug!("Partition Done");
                     break;
                 },
                 ODEState::Err(e) => {
@@ -403,6 +406,8 @@ mod tests{
 
     #[test]
     fn single_qubit_time_ind_ame(){
+        simple_logger::init_with_level(log::Level::Debug).unwrap();
+
         let eta = 1.0e-4;
         let omega_c = 2.0 * f64::pi() * 4.0 ;
         let temp_mk = 12.1;
@@ -444,9 +449,9 @@ mod tests{
 
     #[test]
     fn single_qubit_ame(){
+        //simple_logger::init_with_level(log::Level::Debug).unwrap();
         simple_logger::init_with_level(log::Level::Info).unwrap();
-
-        let eta = 0.0;
+        let eta = 1.0e-4;
         let omega_c = 2.0 * f64::pi() * 4.0 ;
         let temp_mk = 12.1;
 
@@ -481,7 +486,7 @@ mod tests{
         let rho0 = (id.clone() + sz.clone())/c64::from(2.0);
         println!("Initial adiabatic density matrix:\n{}", rho0);
 
-        let rhof = solve_ame(&mut ame, rho0, 1.0e-10, 0.1);
+        let rhof = solve_ame(&mut ame, rho0, 1.0e-6, 0.1);
         match rhof{
             Ok(res) => {
                 let rho = res.rho.last().unwrap();

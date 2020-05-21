@@ -87,12 +87,20 @@ impl<'a> AdiabaticPartitioner<'a>{
         }
     }
 
+    /// Load the partition p from the time-partitioned Hamiltonian
+    /// Currently, will panic if p + 1 != self.p, when p > 0.
+    ///
+    /// This uses the partition projectors of the Hamiltonian to project
+    /// the interval eigenvectors onto partition p (epi), then directly diagonalizes
+    /// the interval in the basis of partition p (evi), and then ensures that evi is adiabatically
+    /// normal with respect to epi.
     pub fn load_partition(&mut self, p: usize){
         // self.p_lindblad_ops.clear();
         match self.interval_t {
             None => {},
             Some((t0, tf)) =>{
                 if p > 0 {
+                    assert_eq!(p, self.p+1);
                     let proj = self.haml.projector(p-1);
                     let ep0 = proj.ad_mul(&self.interval_eigvecs.0);
                     let epf = proj.ad_mul(&self.interval_eigvecs.1);
@@ -111,6 +119,7 @@ impl<'a> AdiabaticPartitioner<'a>{
                 }
             }
         }
+        self.p = p;
     }
 
     pub fn to_current_basis(&self, op: &Op<c64>) -> Op<c64>{
@@ -182,7 +191,7 @@ impl<'a> AdiabaticPartitioner<'a>{
 
     /// Changes the state of the partitioner to the time interval (t0, tf)
     /// The eigenvectors are changed in a way such that if tf == t0, then
-    /// v0 <- vf. Furthermore, vf is loaded in a numerically stabel manner
+    /// v0 <- vf. Furthermore, vf is loaded in a numerically stable manner
     /// by handling degeneracies and relative phases.
     pub fn step_eigvs(&mut self, t0: f64, tf: f64) {
         let prev_t = self.interval_t;

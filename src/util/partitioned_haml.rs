@@ -1,7 +1,7 @@
 use std::iter::FromIterator;
 
 use itertools_num::linspace;
-use log::{info, trace, warn};
+use log::{info, trace, warn, log_enabled, debug};
 use nalgebra::{DMatrix, DVector, Dynamic, U1};
 use ndarray::Array1;
 use num_complex::Complex;
@@ -141,6 +141,9 @@ where R: RealScalar + Float,  Complex<R>: EigScalar<R=R>
 
             let wj = &self.basis_sequence[p+1];
             let proj = wi.ad_mul( wj);
+            if log_enabled!(log::Level::Debug){
+                debug!("proj {} tr = {}", p, proj.trace())
+            }
             self.projector_sequence.push(proj);
         }
 
@@ -222,7 +225,12 @@ where R: RealScalar + Float,  Complex<R>: EigScalar<R=R>
         }
         // Append final point
         new_time_intervals.push(self.time_partitions.last().unwrap().clone());
-        Self::new_with_partitions(self.haml, self.basis_size, new_time_intervals)
+        if new_time_intervals.len() > self.time_partitions.len()
+        {
+            Self::new_with_partitions(self.haml, self.basis_size, new_time_intervals) }
+        else{
+            self
+        }
     }
 
     fn partition_of(&self, t: R) -> Option<usize>{

@@ -14,7 +14,7 @@ use vec_ode::exp::{Commutator, ExponentialSplit};
 use vec_ode::LinearCombination;
 
 use qrs_core::eig::dmatrix::EigScalar;
-use qrs_core::eig::EigJob;
+use qrs_core::eig::{EigJob, EigRange};
 use qrs_core::eig::QEiger;
 //use qrs_core::reps::dense::*;
 use qrs_core::reps::matrix::*;
@@ -36,7 +36,9 @@ impl<T: RealScalar> DenMatExpiSplit<T>
     where C<T> : EigScalar<R=T>
 {
     pub fn new(n: u32) -> Self{
-        Self{n: n as usize, eiger: EigResolver::new_eiger(n, EigJob::ValsVecs, EigRangeData::all())}
+        Self{n: n as usize, eiger: QEiger::<C<T>,  DenseQRep<C<T>>>
+                ::make_eiger((n as usize, n as usize), EigJob::ValsVecs, EigRange::All),
+        }
     }
 }
 
