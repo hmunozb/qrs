@@ -283,18 +283,27 @@ where R: RealScalar + Float,  Complex<R>: EigScalar<R=R>
     //     let row = self.basis_sequence[p].row(i);
     //     row
     // }
-
-    pub fn sparse_canonical_basis_projs(&self, cb: &[usize]) -> Vec<Op<Complex<R>>>{
+    /// Gets the rows of the basis matrix from each index in cb.
+    /// These are simply a subset of the amplitudes in the canonical basis
+    pub fn sparse_canonical_basis_amplitudes(&self, cb: &[usize], p: usize) -> Op<Complex<R>>{
         let n = cb.len();
         let k = self.basis_size as usize;
+        let e_basis = &self.basis_sequence[p];
+        let mut cb_proj :Op<Complex<R>> = Op::zeros(n, k);
+        for i in 0..n{
+            let mut row = cb_proj.row_mut(i);
+            row.copy_from(&e_basis.row(cb[i]));
+        }
+
+        cb_proj
+    }
+    /// For each basis matrix in the basis sequence, gets the rows of the basis
+    /// matrix from each index in cb.
+    /// These are simply a subset of the amplitudes in the canonical basis
+    pub fn sparse_canonical_basis_projs(&self, cb: &[usize]) -> Vec<Op<Complex<R>>>{
         let mut cb_vec = Vec::new();
-        for e_basis in self.basis_sequence.iter(){
-            let mut cb_proj :Op<Complex<R>> = Op::zeros(n, k);
-            for i in 0..n{
-                let mut row = cb_proj.row_mut(i);
-                row.copy_from(&e_basis.row(cb[i]));
-            }
-            cb_vec.push(cb_proj);
+        for p in 0..self.basis_sequence.len(){
+            cb_vec.push(self.sparse_canonical_basis_amplitudes(cb, p));
         }
         cb_vec
     }

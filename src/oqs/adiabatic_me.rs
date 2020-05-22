@@ -73,6 +73,7 @@ pub struct AMEResults{
     pub rho: Vec<Op<c64>>,
     pub partitions: Vec<u32>,
     pub eigvecs: Vec<Op<c64>>,
+    pub tgt_ampls: Vec<Op<c64>>,
     pub observables: Vec<Vec<c64>>
 }
 
@@ -265,7 +266,8 @@ pub fn solve_ame<B: Bath<f64>>(
     ame: &mut AME<B>,
     initial_state: Op<c64>,
     tol: f64,
-    dt_max_frac: f64
+    dt_max_frac: f64,
+    basis_tgts: Vec<usize>
 )
     -> Result<AMEResults, ODEError>
 {
@@ -277,11 +279,22 @@ pub fn solve_ame<B: Bath<f64>>(
     let mut last_delta_t : Option<f64> = None;
     let mut rho_vec: Vec<Op<c64>> = Vec::new();
     let mut eigvecs: Vec<Op<c64>> = Vec::new();
+    let mut tgt_ampls : Vec<Op<c64>> = Vec::new();
     let mut results_parts = Vec::new();
 
 
     rho_vec.push(rho0.clone());
-    eigvecs.push(ame.adb.haml.eig_p(partitions[0], Some(0)).1);
+    // n x n
+    let eigv = ame.adb.haml.eig_p(partitions[0], Some(0)).1;
+    // tgts x n
+    if basis_tgts.len() > 0{
+        let tgt_proj = ame.adb.haml.sparse_canonical_basis_amplitudes(&basis_tgts, 0);
+        let eigvn = tgt_proj * &eigv;
+        tgt_ampls.push(unchange_basis(&rho0, &eigvn));
+    }
+    eigvecs.push(eigv);
+    //let prho0 = change_basis(&rho0, &eigv);
+    // rho_p = eigv(t) rho eigv(t)^{dag}
 
     for (p, (&ti0, &tif)) in partitions.iter()
             .zip(partitions.iter().skip(1))
@@ -369,7 +382,13 @@ pub fn solve_ame<B: Bath<f64>>(
         last_delta_t = Some(solver.ode_data().h);
         let(_, rhof) = solver.into_current();
         rho_vec.push(rhof.clone());
-        eigvecs.push(ame.last_eigvecs().clone());
+        let last_eigvecs = ame.last_eigvecs();
+        if basis_tgts.len() > 0 {
+            let tgt_proj = ame.adb.haml.sparse_canonical_basis_amplitudes(&basis_tgts, p);
+            let eigvn = tgt_proj * last_eigvecs;
+            tgt_ampls.push(unchange_basis(&rhof, &eigvn));
+        }
+        eigvecs.push(last_eigvecs.clone());
         results_parts.push(p as u32);
         //if p + 1 < num_partitions {
         //    rho0 = ame.haml.advance_partition(&rhof, p);
@@ -379,7 +398,7 @@ pub fn solve_ame<B: Bath<f64>>(
     }
 
     let results = AMEResults{t: partitions, rho: rho_vec,
-        partitions: results_parts, eigvecs, observables: Vec::new() };
+        partitions: results_parts, eigvecs, tgt_ampls, observables: Vec::new() };
 
     Ok(results)
 }
@@ -440,7 +459,7 @@ mod tests{
         let rho0 = (id.clone() + &sy)/c64::from(2.0);
 
         let rhof = solve_ame(
-            &mut ame, rho0, 1.0e-6, 0.1);
+            &mut ame, rho0, 1.0e-6, 0.1, vec![]);
 
         match rhof{
             Ok(res) => println!("Final density matrix:\n{}", res.rho.last().unwrap()),
@@ -487,7 +506,7 @@ mod tests{
         let rho0 = (id.clone() + sz.clone())/c64::from(2.0);
         println!("Initial adiabatic density matrix:\n{}", rho0);
 
-        let rhof = solve_ame(&mut ame, rho0, 1.0e-6, 0.1);
+        let rhof = solve_ame(&mut ame, rho0, 1.0e-6, 0.1, vec![]);
         match rhof{
             Ok(res) => {
                 let rho = res.rho.last().unwrap();
