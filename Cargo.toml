@@ -23,18 +23,19 @@ integrators = {git = "https://github.com/hmunozb/integrators.git", branch="no-gs
 interpolation = "0.2.0"
 itertools = "0.8.0"
 itertools-num = "0.1.3"
-num-complex = "0.2"
+num-complex = {version="0.2", features=["serde"]}
 num-traits = "0.2.8"
 ndarray = {version="0.13", features=["rayon"]}
 ndarray-linalg = "0.12"
 log = "0.4.8"
-nalgebra = "0.21"
+nalgebra = {version="0.21", features=["serde-serialize"]}
 qrs-core = {path="qrs-core"}
 qrs-timed = {path="qrs-timed"}
 rand = "0.7.2"
 rand_distr = "0.2.2"
 rand_xoshiro = "0.4.0"
 rayon = "1.0"
+serde = {version = "1.0", features = ["derive"] }
 simd-phys = {git="https://github.com/hmunozb/simd-phys-rs.git"}
 spin-langevin = {git="https://github.com/hmunozb/spin-langevin.git"}
 smallvec = "1.0.0"

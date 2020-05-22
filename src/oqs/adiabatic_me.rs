@@ -6,6 +6,7 @@ use num_complex::Complex;
 use num_complex::Complex64 as c64;
 use num_traits::{Float, Zero};
 use smallvec::SmallVec;
+use serde::{Serialize, Deserialize};
 use vec_ode::{LinearCombination, LinearCombinationSpace, ODEError, ODESolver, ODESolverBase, ODEState, ODEStep};
 use vec_ode::AdaptiveODESolver;
 use vec_ode::exp::{DirectSumL, ExponentialSplit};
@@ -66,7 +67,7 @@ where Complex<T> : Scalar<R=T>
     split
 }
 
-
+#[derive(Serialize, Deserialize)]
 pub struct AMEResults{
     pub t: Vec<f64>,
     pub rho: Vec<Op<c64>>,
