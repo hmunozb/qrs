@@ -267,7 +267,7 @@ pub fn solve_ame<B: Bath<f64>>(
     initial_state: Op<c64>,
     tol: f64,
     dt_max_frac: f64,
-    basis_tgts: Vec<usize>
+    basis_tgts: &Vec<usize>
 )
     -> Result<AMEResults, ODEError>
 {
@@ -459,7 +459,7 @@ mod tests{
         let rho0 = (id.clone() + &sy)/c64::from(2.0);
 
         let rhof = solve_ame(
-            &mut ame, rho0, 1.0e-6, 0.1, vec![]);
+            &mut ame, rho0, 1.0e-6, 0.1, &vec![]);
 
         match rhof{
             Ok(res) => println!("Final density matrix:\n{}", res.rho.last().unwrap()),
@@ -506,7 +506,7 @@ mod tests{
         let rho0 = (id.clone() + sz.clone())/c64::from(2.0);
         println!("Initial adiabatic density matrix:\n{}", rho0);
 
-        let rhof = solve_ame(&mut ame, rho0, 1.0e-6, 0.1, vec![]);
+        let rhof = solve_ame(&mut ame, rho0, 1.0e-6, 0.1, &vec![]);
         match rhof{
             Ok(res) => {
                 let rho = res.rho.last().unwrap();
