@@ -313,21 +313,18 @@ pub fn solve_ame<B: Bath<f64>>(
         ame.load_partition(p);
         let split = make_ame_split(n as u32);
 
-        let f = |t_arr: &[f64], (t0, tf) : (f64, f64)| {
-                ame.generate_split(t_arr, (t0,tf))
-            };
         let norm_fn = |m: &Op<c64>| -> f64{
             //should technically be transposed to row major but denmats are hermitian
-            //let absm = m.map(|c|c.abs());
-                //absm.row_sum().amax()/ ( (n as f64).sqrt())
-                //m.lp_norm(1)
             let arr: ArrayView2<_> = ArrayView2::from_shape((n, n), m.as_slice()).unwrap();
             norm_est.normest1(&arr, 5) / ( (n as f64).sqrt())
         };
 
         let mut rhodag = rho0.clone();
         let mut solver = ExpCFMSolver::new(
-            f, norm_fn,ti0, tif, rho0,  dt, split)
+            |t_arr: &[f64], (t0, tf) : (f64, f64)| {
+                ame.generate_split(t_arr, (t0,tf))
+            },
+            norm_fn,ti0, tif, rho0,  dt, split)
             .with_tolerance(1.0e-6, tol)
             .with_step_range(min_step,
                              max_step)
@@ -380,8 +377,10 @@ pub fn solve_ame<B: Bath<f64>>(
         }
 
         last_delta_t = Some(solver.ode_data().h);
+        // End of solver lifetime and ame borrow
         let(_, rhof) = solver.into_current();
         rho_vec.push(rhof.clone());
+
         let last_eigvecs = ame.last_eigvecs();
         if basis_tgts.len() > 0 {
             let tgt_proj = ame.adb.haml.sparse_canonical_basis_amplitudes(&basis_tgts, p);
@@ -390,11 +389,9 @@ pub fn solve_ame<B: Bath<f64>>(
         }
         eigvecs.push(last_eigvecs.clone());
         results_parts.push(p as u32);
-        //if p + 1 < num_partitions {
-        //    rho0 = ame.haml.advance_partition(&rhof, p);
-        //} else {
+
         rho0 = rhof;
-        //}
+
     }
 
     let results = AMEResults{t: partitions, rho: rho_vec,
