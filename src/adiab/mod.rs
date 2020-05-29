@@ -163,8 +163,8 @@ impl<'a> AdiabaticPartitioner<'a>{
         let (_vals1, vecs1) =  self.normalized_eigv(t-dt);
         let (_vals2, vecs2) = self.normalized_eigv(t+dt);
 
-        let mut w1 = eigvecs.ad_mul(&vecs1);
-        let mut w2 = eigvecs.ad_mul(&vecs2);
+        let w1 = eigvecs.ad_mul(&vecs1);
+        let w2 = eigvecs.ad_mul(&vecs2);
 
         let mut w_dot = w2;
         w_dot -= &w1;

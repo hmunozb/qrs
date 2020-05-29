@@ -103,10 +103,9 @@ pub struct AME<'a, B: Bath<f64>>{
     p_lindblad_ops: Vec<Op<c64>>,
     work: AMEWorkpad<f64>,
     adiab_haml: Op<c64>,
-    diab_k: Op<c64>,
+    //diab_k: Op<c64>,
     lind_pauli: Op<c64>,
     lind_coh: Op<c64>,
-
 
 
     bath: &'a B,
@@ -126,7 +125,7 @@ impl<'a, B: Bath<f64>> AME<'a, B> {
             lindblad_ops, p_lindblad_ops: Vec::new(),
             work: AMEWorkpad::new(n as usize, k),
             adiab_haml: Op::zeros(n, n),
-            diab_k: Op::zeros(n,n),
+            //diab_k: Op::zeros(n,n),
             lind_pauli: Op::zeros(n, n),
             lind_coh: Op::zeros(n, n),
              a_eigvecs: Op::zeros(n, n),
@@ -151,21 +150,13 @@ impl<'a, B: Bath<f64>> AME<'a, B> {
         }
     }
 
-    /// Loads the eigenvalues and eigenvectors of time t
-    /// No gauge or degeneracy handling
-    fn load_eigv(&mut self, t: f64, _p: usize, _degen_handle: bool){
-        let (vals, vecs) = self.adb.load_eigv(t);
-        self.a_eigvals = vals;
-        self.a_eigvecs = vecs;
-    }
-
     ///// Loads the eigenvalues and eigenvectors of time t
     ///// with degeneracy handling
-    fn load_eigv_degen_handle(&mut self, t: f64, _p: usize, v0: &Op<c64>){
-        let (vals, vecs) = self.adb.eigv_degen_handle(t, v0);
-        self.a_eigvals = vals;
-        self.a_eigvecs = vecs;
-    }
+    // fn load_eigv_degen_handle(&mut self, t: f64, _p: usize, v0: &Op<c64>){
+    //     let (vals, vecs) = self.adb.eigv_degen_handle(t, v0);
+    //     self.a_eigvals = vals;
+    //     self.a_eigvecs = vecs;
+    // }
     fn load_eigv_normal(&mut self, t: f64){
         let (vals, vecs) = self.adb.normalized_eigv(t);
         self.a_eigvals = vals;

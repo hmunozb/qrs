@@ -22,7 +22,7 @@ pub fn gibbs_state<'a, N: ComplexScalar, Q: QRep<N, OpRep=QOpT>, QEig: QEiger<N,
 ) -> GibbsResult<N::R, QOpT>
 where N::R : Real
 {
-    let (mut vals, mut vecs) = q_eiger.eigh(haml);
+    let (vals, vecs) = q_eiger.eigh(haml);
     let n = vals.len();
     let mut vals : Array1<N::R> = Array1::from(vals);
     let &e0 = vals.min().unwrap();

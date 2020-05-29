@@ -36,9 +36,6 @@ TimeDependentOperatorTerm<'a, R, N, Q, T>
     pub fn new_with_owned(q: T, f: &'a dyn Fn(R) -> N) -> Self{
         Self{op: Cow::Owned(q), f, _phantom: Default::default() }
     }
-    // pub fn new_with_owned_boxed(q: T, f: Box<dyn Fn(R)->N>) -> Self{
-    //     Self{op: Cow::Owned(q), f, _phantom: Default::default() }
-    // }
 
     pub fn shape(&self) -> T::Dims{
         self.op.qdim()

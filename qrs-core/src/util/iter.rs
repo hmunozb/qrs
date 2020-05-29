@@ -20,3 +20,15 @@ where N: 'a + Zero, N: Add<&'a N, Output=N>
         iter.fold(Zero::zero(), Add::add)
     }
 }
+
+// why is this perfect example in the std docs but not actually implemented?
+pub fn advance_n_and_return_first<I>(iter: &mut I, total_step: usize) -> Option<I::Item>
+    where
+        I: Iterator,
+{
+    let next = iter.next();
+    if total_step > 1 {
+        iter.nth(total_step-2);
+    }
+    next
+}
