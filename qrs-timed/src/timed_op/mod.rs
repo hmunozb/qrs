@@ -10,7 +10,7 @@ pub struct TimeDependentOperatorTerm<
     Q: QRep<N>, T: QObj<N, Rep=Q>>
 {
     pub op: Cow<'a, T>,
-    pub f: Box<&'a dyn Fn(R)->N>,
+    pub f: &'a dyn Fn(R)->N,
     _phantom: PhantomData<Q>
 }
 
@@ -31,11 +31,14 @@ impl<'a, R: RealField, N: ComplexScalar, Q: QRep<N>, T: QObj<N, Rep=Q>>
 TimeDependentOperatorTerm<'a, R, N, Q, T>
     where N: ComplexField{
     pub fn new(q: &'a T, f: &'a dyn Fn(R) -> N) -> Self{
-        Self{op: Cow::Borrowed(q), f: Box::new(f), _phantom: Default::default() }
+        Self{op: Cow::Borrowed(q), f, _phantom: Default::default() }
     }
     pub fn new_with_owned(q: T, f: &'a dyn Fn(R) -> N) -> Self{
-        Self{op: Cow::Owned(q), f: Box::new(f), _phantom: Default::default() }
+        Self{op: Cow::Owned(q), f, _phantom: Default::default() }
     }
+    // pub fn new_with_owned_boxed(q: T, f: Box<dyn Fn(R)->N>) -> Self{
+    //     Self{op: Cow::Owned(q), f, _phantom: Default::default() }
+    // }
 
     pub fn shape(&self) -> T::Dims{
         self.op.qdim()
