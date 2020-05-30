@@ -80,6 +80,7 @@ pub struct AMEResults{
 #[derive(Serialize, Deserialize, Clone)]
 pub struct AMEState{
     pub t: f64,
+    pub p: i32,
     pub rho: Op<c64>,
     pub eigvecs: Op<c64>,
     pub tgt_ampls: Option<Op<c64>>,
@@ -352,6 +353,7 @@ pub fn solve_ame<B: Bath<f64>>(
 
     let ame_state = AMEState{
         t: t0,
+        p: 0,
         rho: rho0.clone(),
         eigvecs: eigv.clone(),
         tgt_ampls,
@@ -404,6 +406,7 @@ pub fn solve_ame<B: Bath<f64>>(
 
         let ame_state = AMEState{
             t: tif,
+            p: p as i32,
             rho: rhof.clone(),
             eigvecs: (*last_eigvecs).clone(),
             tgt_ampls,
