@@ -77,6 +77,16 @@ pub struct AMEResults{
     pub observables: Vec<Vec<c64>>
 }
 
+#[derive(Serialize, Deserialize, Clone)]
+pub struct AMEState{
+    pub t: f64,
+    pub rho: Op<c64>,
+    pub eigvecs: Op<c64>,
+    pub tgt_ampls: Option<Op<c64>>,
+    //pub observables: Vec<c64>
+}
+
+
 impl AMEResults{
     pub fn change_rho_basis(&self, new_bases: Vec<Op<c64>>) -> Vec<Op<c64>>{
         let mut new_rhos = Vec::new();
@@ -251,6 +261,69 @@ impl<'a, B: Bath<f64>> AME<'a, B> {
 
 }
 
+
+fn basis_tgts_ampls(basis_tgts: Option<&Vec<usize>>, rho: &Op<c64>, eigv: &Op<c64>, haml: &TimePartHaml<f64>) -> Option<Op<c64>>{
+    if let Some(basis_tgts_vec) = basis_tgts{
+        return if basis_tgts_vec.len() > 0 {
+            let tgt_proj = haml.sparse_canonical_basis_amplitudes(basis_tgts_vec, 0);
+            let eigvn = tgt_proj * eigv;
+            Some(unchange_basis(rho, &eigvn))
+        } else {
+            None
+        }
+    }
+
+    None
+}
+
+fn inner_solver_loop<Solver>(solver: &mut Solver) -> Result<(),ODEError>
+where Solver: AdaptiveODESolver<f64, RangeType=Op<c64>>
+{
+    let mut rhodag : Op<c64> = solver.ode_data().x.clone();
+    let mut ema_rej = 0.0;
+    loop{
+        let res = solver.step_adaptive();
+        match res{
+            ODEState::Ok(step) => {
+                match step{
+                    ODEStep::Step(dt) => {
+                        trace!("t={}\tStepped by {}", solver.ode_data().t, dt);
+                        ema_rej = ema_rej * 0.90;
+                    },
+                    ODEStep::Reject => {
+                        ema_rej = ema_rej*0.90 + 0.10*1.0;
+                        if ema_rej > 0.9{
+                            panic!("Rejection rate too large.");
+                        } else if ema_rej > 0.75 {
+                            warn!("t={} *** High rejection rate ***\n\t (90% EMA: {})\t\tRejected step size: {}",
+                                  solver.ode_data().t, ema_rej, solver.ode_data().next_dt)
+                        }
+                        else if ema_rej > 0.5 {
+                            trace!("t={} *** Elevated rejection rate ***\n\t (90% EMA: {})\t\tRejected step size: {}",
+                                   solver.ode_data().t, ema_rej, solver.ode_data().next_dt)
+                        }
+                    },
+                    _ => {}
+                }
+            },
+            ODEState::Done => {
+                debug!("Partition Done");
+                break;
+            },
+            ODEState::Err(e) => {
+                error!("ODE solver error occurred.");
+                return Err(e);
+            }
+        }
+        let dat = solver.ode_data_mut();
+        dat.x.adjoint_to(&mut rhodag);
+        dat.x += &rhodag;
+        dat.x /= c64::from(2.0);
+    }
+
+    Ok(())
+}
+
 /// Solves the adiabatic master equation constructed according to the provided
 /// partitioned Hamiltonian, Lindblad operators, and bath spectral density
 pub fn solve_ame<B: Bath<f64>>(
@@ -258,34 +331,33 @@ pub fn solve_ame<B: Bath<f64>>(
     initial_state: Op<c64>,
     tol: f64,
     dt_max_frac: f64,
-    basis_tgts: &Vec<usize>
+    basis_tgts: Option<&Vec<usize>>,
+    callback: Option<&dyn Fn(&AMEState)>
 )
-    -> Result<AMEResults, ODEError>
+    -> Result<Vec<AMEState>, ODEError>
 {
     let partitions  = ame.adb.haml.partitions().to_owned();
     let num_partitions = partitions.len() - 1;
     let n = ame.adb.haml.basis_size() as usize;
+    let t0 = partitions[0];
     let mut norm_est = condest::Normest1::new(n, 2);
     let mut rho0 = initial_state;
     let mut last_delta_t : Option<f64> = None;
-    let mut rho_vec: Vec<Op<c64>> = Vec::new();
-    let mut eigvecs: Vec<Op<c64>> = Vec::new();
-    let mut tgt_ampls : Vec<Op<c64>> = Vec::new();
-    let mut results_parts = Vec::new();
+    let mut results_vec  = Vec::new();
 
-
-    rho_vec.push(rho0.clone());
     // n x n
-    let eigv = ame.adb.haml.eig_p(partitions[0], Some(0)).1;
+    let eigv = ame.adb.haml.eig_p(t0, Some(0)).1;
     // tgts x n
-    if basis_tgts.len() > 0{
-        let tgt_proj = ame.adb.haml.sparse_canonical_basis_amplitudes(&basis_tgts, 0);
-        let eigvn = tgt_proj * &eigv;
-        tgt_ampls.push(unchange_basis(&rho0, &eigvn));
-    }
-    eigvecs.push(eigv);
-    //let prho0 = change_basis(&rho0, &eigv);
-    // rho_p = eigv(t) rho eigv(t)^{dag}
+    let tgt_ampls = basis_tgts_ampls(basis_tgts, &rho0, &eigv, &ame.adb.haml);
+
+    let ame_state = AMEState{
+        t: t0,
+        rho: rho0.clone(),
+        eigvecs: eigv.clone(),
+        tgt_ampls,
+    };
+    callback.map(|f| f(&ame_state));
+    results_vec.push(ame_state);
 
     for (p, (&ti0, &tif)) in partitions.iter()
             .zip(partitions.iter().skip(1))
@@ -321,74 +393,28 @@ pub fn solve_ame<B: Bath<f64>>(
                              max_step)
             .with_init_step(dt)
             ;
-
-        //let mut iters = 0;
-        //let mut rejects = 0;
-        let mut ema_rej :f64 = 0.0;
-        loop{
-            let res = solver.step_adaptive();
-            //let res = solver.step();
-            match res{
-                ODEState::Ok(step) => {
-                    match step{
-                        ODEStep::Step(dt) => {
-                            trace!("t={}\tStepped by {}", solver.ode_data().t, dt);
-                            ema_rej = ema_rej * 0.90;
-                        },
-                        ODEStep::Reject => {
-                            ema_rej = ema_rej*0.90 + 0.10*1.0;
-                            if ema_rej > 0.9{
-                                panic!("Rejection rate too large.");
-                            } else if ema_rej > 0.75 {
-                                warn!("t={} *** High rejection rate ***\n\t (90% EMA: {})\t\tRejected step size: {}",
-                                      solver.ode_data().t, ema_rej, solver.ode_data().next_dt)
-                            }
-                            else if ema_rej > 0.5 {
-                                trace!("t={} *** Elevated rejection rate ***\n\t (90% EMA: {})\t\tRejected step size: {}",
-                                      solver.ode_data().t, ema_rej, solver.ode_data().next_dt)
-                            }
-                        },
-                        _ => {}
-                    }
-                },
-                ODEState::Done => {
-                    debug!("Partition Done");
-                    break;
-                },
-                ODEState::Err(e) => {
-                    error!("ODE solver error occurred.");
-                    return Err(e);
-                }
-            }
-            //Enforce Hermiticity after each step
-            let dat = solver.ode_data_mut();
-            dat.x.adjoint_to(&mut rhodag);
-            dat.x += &rhodag;
-            dat.x /= c64::from(2.0);
-        }
+        inner_solver_loop(&mut solver)?;
 
         last_delta_t = Some(solver.ode_data().h);
         // End of solver lifetime and ame borrow
         let(_, rhof) = solver.into_current();
-        rho_vec.push(rhof.clone());
 
         let last_eigvecs = ame.last_eigvecs();
-        if basis_tgts.len() > 0 {
-            let tgt_proj = ame.adb.haml.sparse_canonical_basis_amplitudes(&basis_tgts, p);
-            let eigvn = tgt_proj * last_eigvecs;
-            tgt_ampls.push(unchange_basis(&rhof, &eigvn));
-        }
-        eigvecs.push(last_eigvecs.clone());
-        results_parts.push(p as u32);
+        let tgt_ampls = basis_tgts_ampls(basis_tgts, &rhof,last_eigvecs, &ame.adb.haml);
 
+        let ame_state = AMEState{
+            t: tif,
+            rho: rhof.clone(),
+            eigvecs: (*last_eigvecs).clone(),
+            tgt_ampls,
+        };
+
+        callback.map(|f| f(&ame_state));
+        results_vec.push(ame_state);
         rho0 = rhof;
-
     }
 
-    let results = AMEResults{t: partitions, rho: rho_vec,
-        partitions: results_parts, eigvecs, tgt_ampls, observables: Vec::new() };
-
-    Ok(results)
+    Ok(results_vec)
 }
 
 #[cfg(test)]
@@ -447,10 +473,10 @@ mod tests{
         let rho0 = (id.clone() + &sy)/c64::from(2.0);
 
         let rhof = solve_ame(
-            &mut ame, rho0, 1.0e-6, 0.1, &vec![]);
+            &mut ame, rho0, 1.0e-6, 0.1, None, None);
 
         match rhof{
-            Ok(res) => println!("Final density matrix:\n{}", res.rho.last().unwrap()),
+            Ok(res) => println!("Final density matrix:\n{}", res.last().unwrap().rho),
             Err(e) => println!("An ODE Solver error occurred")
         }
     }
@@ -494,10 +520,10 @@ mod tests{
         let rho0 = (id.clone() + sz.clone())/c64::from(2.0);
         println!("Initial adiabatic density matrix:\n{}", rho0);
 
-        let rhof = solve_ame(&mut ame, rho0, 1.0e-6, 0.1, &vec![]);
+        let rhof = solve_ame(&mut ame, rho0, 1.0e-6, 0.1, None, None);
         match rhof{
             Ok(res) => {
-                let rho = res.rho.last().unwrap();
+                let rho = &res.last().unwrap().rho;
                 let mut tr = 0.0; let mut pops = Vec::new();
                 let n = rho.shape().0;
                 for i in 0..n{
