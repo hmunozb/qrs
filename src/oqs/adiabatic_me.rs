@@ -333,7 +333,7 @@ pub fn solve_ame<B: Bath<f64>>(
     tol: f64,
     dt_max_frac: f64,
     basis_tgts: Option<&Vec<usize>>,
-    callback: Option<&dyn Fn(&AMEState)>
+    mut callback: Option<&mut dyn FnMut(&AMEState)>
 )
     -> Result<Vec<AMEState>, ODEError>
 {
@@ -358,7 +358,7 @@ pub fn solve_ame<B: Bath<f64>>(
         eigvecs: eigv.clone(),
         tgt_ampls,
     };
-    callback.map(|f| f(&ame_state));
+    callback.as_mut().map(|f| f(&ame_state));
     results_vec.push(ame_state);
 
     for (p, (&ti0, &tif)) in partitions.iter()
@@ -412,7 +412,7 @@ pub fn solve_ame<B: Bath<f64>>(
             tgt_ampls,
         };
 
-        callback.map(|f| f(&ame_state));
+        callback.as_mut().map(|f| f(&ame_state));
         results_vec.push(ame_state);
         rho0 = rhof;
     }
