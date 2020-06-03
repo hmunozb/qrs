@@ -177,6 +177,15 @@ for Op<N>
     }
 }
 
+/// Evaluate the tensor product of the slice of operators
+/// where the first operator contributes to the *least significant*
+/// digit of the tensor space index. That is, if the argument is the 2D operators
+/// `[s0, s1, ..., sn]`
+/// then the tensor operator is
+/// ```math
+///     S = s_n \otimes \ldots \otimes s_1 \otimes s_0
+/// ```
+/// and the least significant bit of each index of S is the index for s_0
 pub fn tensor_list<N: ComplexScalar>(ops: &[ Op<N>]) -> Op<N>{
     if ops.len() == 0{
         panic!("tensor_list Op slice cannot be empty");
@@ -184,7 +193,7 @@ pub fn tensor_list<N: ComplexScalar>(ops: &[ Op<N>]) -> Op<N>{
     let (first, rest) = ops.split_at(1);
     let mut v = first[0].clone();
     for u in rest.iter(){
-        v = TensorProd::tensor_ref(&v, &u)
+        v = TensorProd::tensor_ref(u, &v)
     }
 
     v
