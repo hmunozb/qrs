@@ -263,10 +263,10 @@ impl<'a, B: Bath<f64>> AME<'a, B> {
 }
 
 
-fn basis_tgts_ampls(basis_tgts: Option<&Vec<usize>>, rho: &Op<c64>, eigv: &Op<c64>, haml: &TimePartHaml<f64>) -> Option<Op<c64>>{
+fn basis_tgts_ampls(basis_tgts: Option<&Vec<usize>>, rho: &Op<c64>, eigv: &Op<c64>, haml: &TimePartHaml<f64>, p: usize) -> Option<Op<c64>>{
     if let Some(basis_tgts_vec) = basis_tgts{
         return if basis_tgts_vec.len() > 0 {
-            let tgt_proj = haml.sparse_canonical_basis_amplitudes(basis_tgts_vec, 0);
+            let tgt_proj = haml.sparse_canonical_basis_amplitudes(basis_tgts_vec, p);
             let eigvn = tgt_proj * eigv;
             Some(unchange_basis(rho, &eigvn))
         } else {
@@ -349,7 +349,7 @@ pub fn solve_ame<B: Bath<f64>>(
     // n x n
     let eigv = ame.adb.haml.eig_p(t0, Some(0)).1;
     // tgts x n
-    let tgt_ampls = basis_tgts_ampls(basis_tgts, &rho0, &eigv, &ame.adb.haml);
+    let tgt_ampls = basis_tgts_ampls(basis_tgts, &rho0, &eigv, &ame.adb.haml, 0);
 
     let ame_state = AMEState{
         t: t0,
@@ -402,7 +402,7 @@ pub fn solve_ame<B: Bath<f64>>(
         let(_, rhof) = solver.into_current();
 
         let last_eigvecs = ame.last_eigvecs();
-        let tgt_ampls = basis_tgts_ampls(basis_tgts, &rhof,last_eigvecs, &ame.adb.haml);
+        let tgt_ampls = basis_tgts_ampls(basis_tgts, &rhof,last_eigvecs, &ame.adb.haml, p);
 
         let ame_state = AMEState{
             t: tif,
