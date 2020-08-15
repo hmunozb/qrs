@@ -35,7 +35,7 @@ use super::ame_liouv::{Scalar, AMEWorkpad, ame_liouvillian};
 //use alga::linear::NormedSpace;
 
 static AME_DIS_KINETIC_SCALE_LIM : f64 = 5.0e-1;
-static AME_HAML_COHERENT_SCALE_LIM : f64 = 1.0e9;
+//static AME_HAML_COHERENT_SCALE_LIM : f64 = 1.0e9;
 
 type AMEDissipatorSplit<T> = CommutativeExpSplit<T, Complex<T>, Op<Complex<T>>,
                                 MaybeScalePowExp<T, KineticExpSplit<T>>,
@@ -384,7 +384,7 @@ pub fn solve_ame<B: Bath<f64>>(
             norm_est.normest1(&arr, 5) / ( (n as f64).sqrt())
         };
 
-        let mut rhodag = rho0.clone();
+        let rhodag = rho0.clone();
         let mut solver = ExpCFMSolver::new(
             |t_arr: &[f64], (t0, tf) : (f64, f64)| {
                 ame.generate_split(t_arr, (t0,tf))
@@ -455,7 +455,7 @@ mod tests{
 
         let tf = 10.0;
         let dt = 0.01;
-        let mut sp_haml = DenMatExpiSplit::<f64>::new(2);
+        let sp_haml = DenMatExpiSplit::<f64>::new(2);
         let id = pauli::id::<f64>();
         let sx = pauli::sx::<f64>();
         let sy = pauli::sy::<f64>();
@@ -500,7 +500,7 @@ mod tests{
 
         let tf = 10.0 / f64::sqrt(2.0);
         let dt = 0.01;
-        let mut sp_haml = DenMatExpiSplit::<f64>::new(2);
+        let sp_haml = DenMatExpiSplit::<f64>::new(2);
         let id = pauli::id::<f64>();
         let sx = pauli::sx::<f64>();
         let sy = pauli::sy::<f64>();
