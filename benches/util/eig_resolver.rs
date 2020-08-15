@@ -1,15 +1,17 @@
+#![allow(non_upper_case_globals)]
+#![allow(dead_code)]
+
 use criterion::{BenchmarkId, Criterion};
 use nalgebra::DMatrix;
 use num_complex::Complex64 as c64;
 use rand::prelude::*;
-use rand_distr::{Normal, StandardNormal};
+use rand_distr::{Normal};
 
 use qrs_core::reps::matrix::*;
 use qrs_core::eig::dense::EigResolver;
 use qrs_core::eig::{EigJob, Layout, QEiger};
 use qrs::util::*;
 
-use super::*;
 
 static _1z: c64 = c64{re:1.0, im:0.0};
 static _m1z: c64 = c64{re:-1.0, im:0.0};
@@ -66,8 +68,9 @@ where Fun: FnMut(&mut DMatrix<c64>)
 
     let mut eig_resolver : EigResolver<c64> = EigResolver::new(
         n, EigJob::ValsVecs, EigRangeData::all(),  Layout::RowMajor,false);
+
     let mut m = Op::zeros(n as usize, n as usize);
-    for i in 0..k{
+    for _i in 0..k {
         f(&mut m);
         QEiger::<c64, DenseQRep<c64>>::eigh(&mut eig_resolver, &m);
     }
@@ -99,7 +102,7 @@ fn bench_random_hermitian(c: &mut Criterion, n: usize){
     let dist = Normal::new(0.0,  0.5_f64.sqrt()).unwrap();
 
     let mut rand_normal_c64 = || c64::new(r.sample(dist), r.sample(dist));
-    let mut rh : DMatrix<c64> = DMatrix::from_fn(n, n, |i, j| { rand_normal_c64() });
+    let mut rh : DMatrix<c64> = DMatrix::from_fn(n, n, |_i, _j| { rand_normal_c64() });
     let mut reg: DMatrix<c64> = DMatrix::zeros(n,n);
 
     //Generates a random positive definite matrix with unit trace
@@ -133,7 +136,7 @@ fn bench_random_hermitian(c: &mut Criterion, n: usize){
                i,
                |b,j| b.iter(
                    ||{
-                       for i in 0..*j{ rand_herm(n as u32, 1, &mut f) } })
+                       for _ in 0..*j{ rand_herm(n as u32, 1, &mut f) } })
         );
     }
 //
