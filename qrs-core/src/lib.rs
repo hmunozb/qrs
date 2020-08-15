@@ -10,7 +10,6 @@ pub mod eig;
 pub mod quantum;
 pub mod reps;
 pub mod util;
-mod qmatrix;
 
 pub use simba::scalar::{RealField, ComplexField, SubsetOf, SupersetOf, ClosedAdd, ClosedMul};
 

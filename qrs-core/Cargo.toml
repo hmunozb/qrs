@@ -12,7 +12,6 @@ approx = {version = "0.3", features=["num-complex"]}
 cauchy = "0.2"
 cblas = "0.2"
 itertools = "0.8"
-generic-array = "0.14.1"
 lapack-traits = {version = "0.2.2", features=["simba"]}
 lapacke = "0.2"
 nalgebra = "0.21.0"
