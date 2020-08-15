@@ -98,7 +98,7 @@ mod tests{
         use num_complex::Complex64 as c64;
         //use crate::base::DenseQRep;
         use qrs_core::quantum::{TensorProd};
-        use qrs_core::reps::matrix::{Op};
+        //use qrs_core::reps::matrix::{Op};
 
         let _1c = c64::new(1.0, 0.0);
         let _0c = c64::new(0.0, 0.0);
