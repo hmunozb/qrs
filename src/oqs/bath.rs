@@ -1,7 +1,10 @@
-use integrators::gsl::{QAGIL, QAGIU, QAWC};
+use complex_polygamma::trigamma;
+use integrators::gsl::{QAGIL, QAGIU, QAWC, QAG};
 use integrators::Integrator;
 use itertools_num::linspace;
 use num_traits::real::Real;
+use num_traits::{One, Float};
+use num_complex::Complex;
 
 use crate::{ComplexField, RealField, RealScalar};
 use crate::util::{InterpBounds, LinearInterpFn};
@@ -10,6 +13,16 @@ pub trait Bath<N: RealScalar> {
     fn gamma(&self, omega: N) -> N;
     fn has_lamb_shift(&self) -> bool;
     fn lamb_shift(&self, omega:N) -> Option<N>;
+}
+
+pub trait CorrelationFunction<N: RealScalar> {
+    fn cor(&self, t: N) -> Complex<N>;
+
+    /// Evaluate tau_sb, the decoherence time scale
+    fn tau_sb(&self) -> Option<N>;
+    /// Evaluate the bath correlation time and the coupling correlation time 
+    /// Returns the tuple (tau_b, tau_sb)
+    fn tau_b_sb(&self) -> Option<(N, N)>;
 }
 
 pub struct OhmicBath<N: RealScalar>{
@@ -96,5 +109,86 @@ impl<N:RealScalar> Bath<N> for OhmicBath<N>{
 
     fn lamb_shift(&self, omega:N) -> Option<N>{
         self.lamb.as_ref().map(|lerp| lerp.at(omega))
+    }
+}
+
+impl<N:RealScalar+Float> CorrelationFunction<N> for OhmicBath<N>
+where Complex<N> : ComplexField<RealField=N>
+{
+    fn cor(&self, t: N) -> Complex<N> {
+        //let t = t.to_f64().unwrap();
+        let z = Complex::<N>::new( Real::recip(self.omega_c * self.beta),
+             t /self.beta,
+        );
+        let b = Complex::from(self.eta / (self.beta * self.beta) ) * (
+            trigamma(z.conj() + One::one()).unwrap()
+            + trigamma(z).unwrap()
+        );
+
+        return b;
+    }
+
+    /// Evaluate tau_sb, the decoherence time scale of the ohmic bath
+    fn tau_sb(&self) -> Option<N>{
+        let mut qagiu = QAGIU::new(100, 0.0);
+        let resiu = qagiu.integrate(
+            |t: f64| self.cor(N::from_f64(t).unwrap()).norm().to_f64().unwrap(),
+            1.0e-8, 1.0e-8).unwrap();
+        //println!("val={}, err={}",resiu.value, resiu.error);
+
+        Some(N::from_f64(1.0/resiu.value).unwrap())
+        
+    }
+
+    fn tau_b_sb(&self) -> Option<(N, N)> {
+        let mut qagiu = QAGIU::new(100, 0.0);
+        // let resiu_b = qagiu.integrate(
+        //     |t: f64| t * self.cor(N::from_f64(t).unwrap()).norm().to_f64().unwrap(),
+        //  1.0e-8, 1.0e-8).unwrap();
+        // let resiu_sb = qagiu.integrate(
+        //     |t: f64| self.cor(N::from_f64(t).unwrap()).norm().to_f64().unwrap(),
+        //  1.0e-8, 1.0e-8).unwrap();
+        let tau_sb = self.tau_sb().unwrap();
+        let tau_sb_f64 = tau_sb.to_f64().unwrap();
+        let mut qag = QAG::new(100)
+            .with_range(0.0, tau_sb_f64);
+        let resqag = qag.integrate(
+            |t: f64| t * self.cor(N::from_f64(t).unwrap()).norm().to_f64().unwrap(), 
+            1.0e-8,1.0e-8).unwrap();
+        //println!("val={}, err={}",resiu.value, resiu.error);
+
+        Some((N::from_f64(resqag.value * tau_sb_f64).unwrap(), 
+              tau_sb))
+    }
+
+
+    
+}
+
+#[cfg(test)]
+mod tests{
+    use core::f64::consts::PI;
+    use super::{OhmicBath, Bath, CorrelationFunction};
+    use integrators::Integrator;
+    use integrators::gsl::QAGIU;
+    use itertools_num::linspace;
+
+
+    #[test]
+    fn test_correlation(){
+        let temp = 2.6;
+        let bath = OhmicBath::new(1.0e-4, 8.0 * PI, 1.0/temp);
+
+        for t in linspace(0.0, 10.0, 101){
+            let ct = bath.cor(t);
+            println!("{:3.2},  {}", t, ct.norm());
+        }
+
+        let (tau_b, tau_sb) = bath.tau_b_sb().unwrap();
+        //let tau_sb = bath.tau_sb().unwrap();
+        // let mut qagiu = QAGIU::new(100, 0.0);
+        // let resiu = qagiu.integrate(|t| bath.cor(t).norm(), 1.0e-8, 1.0e-8).unwrap();
+        println!("tau_b = {},\ntau_sb= {}", tau_b, tau_sb);
+        
     }
 }
