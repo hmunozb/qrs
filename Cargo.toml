@@ -18,7 +18,7 @@ cblas = "0.2.0"
 condest = {git = "https://github.com/hmunozb/rust-condest.git", branch="generic-scalar"}
 lapacke = "0.2.0"
 expm = {git = "https://github.com/hmunozb/rust-expm.git", branch="generic-scalar"}
-integrators = {git = "https://github.com/hmunozb/integrators.git", branch="bindgen-0.51", default-features=false, features=["gsl","no_gslcblas"]}
+integrators = {git = "https://github.com/hmunozb/integrators.git", default-features=false, features=["gsl","no_gslcblas"]}
 #integrators = {version="0.0.3", default-features=false, features=["gsl"]}
 interpolation = "0.2.0"
 itertools = "0.8.0"
