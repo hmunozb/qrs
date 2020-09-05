@@ -27,7 +27,7 @@ num-complex = {version="0.2", features=["serde"]}
 num-traits = "0.2.8"
 ndarray = {version="0.13", features=["rayon"]}
 ndarray-linalg = "0.12"
-complex-polygamma = {path="/Users/hmb/Google Drive/RustProj/complex-polygamma"}
+complex-polygamma = {git="https://github.com/hmunozb/complex-polygamma.git"}
 log = "0.4.8"
 nalgebra = {version="0.21", features=["serde-serialize"]}
 qrs-core = {path="qrs-core"}
