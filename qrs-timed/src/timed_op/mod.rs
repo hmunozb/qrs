@@ -53,10 +53,10 @@ TimeDependentOperatorTerm<'a, R, N, Q, T>
     }
 }
 
-impl<'a, R: RealScalar, N: ComplexScalar<R=R>, Q: QRep<N>, T: QObj<N, Rep=Q>>
+impl<'a, R: RealScalar, N: ComplexScalar, Q: QRep<N>, T: QObj<N, Rep=Q>>
 TimeDependentOperator<'a, R, N, Q, T>
 {
-    pub fn eval(&self, t: N::R) -> T{
+    pub fn eval(&self, t: R) -> T{
         let mut op : T  = (*self.terms.first().unwrap().op).clone();
         self.eval_to(&mut op, t);
         op
