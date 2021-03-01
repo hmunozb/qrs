@@ -14,9 +14,31 @@ pub trait ComplexScalar :
 nalgebra::ComplexField<RealField=<Self as ComplexScalar>::R>
 {
     type R : RealScalar;
+
+    fn i() -> Self;
 }
 
-impl ComplexScalar for f32{ type R = f32;}
-impl ComplexScalar for f64{ type R = f64;}
-impl ComplexScalar for num_complex::Complex<f32>{type R = f32;}
-impl ComplexScalar for num_complex::Complex<f64>{type R = f64;}
+impl ComplexScalar for f32{
+    type R = f32;
+    fn i() -> f32{
+        panic!("No imaginary unit for f32")
+    }
+}
+impl ComplexScalar for f64{
+    type R = f64;
+    fn i() -> f64{
+        panic!("No imaginary unit for f64")
+    }
+}
+impl ComplexScalar for num_complex::Complex<f32>{
+    type R = f32;
+    fn i() -> num_complex::Complex<f32>{
+        return num_complex::Complex::i();
+    }
+}
+impl ComplexScalar for num_complex::Complex<f64>{
+    type R = f64;
+    fn i() -> num_complex::Complex<f64>{
+        return num_complex::Complex::i();
+    }
+}

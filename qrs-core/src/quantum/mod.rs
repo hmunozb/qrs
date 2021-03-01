@@ -115,6 +115,12 @@ pub trait FDimQRep<N: ComplexScalar, Idx: ?Sized>
         where I: IntoIterator<Item=N>;
 }
 
+pub trait NormedQRep<N: ComplexScalar> : QRep<N>{
+
+    fn ket_norm_sq(v: &Self::KetRep) -> N::R;
+    fn ket_norm(v: &Self::KetRep) -> N::R;
+}
+
 pub trait QRepFunctor<N1, N2, Q1, Q2>
 where   N1: ComplexScalar, Q1: QRep<N1>,
         N2: ComplexScalar, Q2: QRep<N2>
@@ -233,3 +239,52 @@ where Q: QObj<N>{
         self.q.qaxby(a, &x.q, b)
     }
 }
+
+pub trait LinearOperator<V, N: ComplexScalar>{
+    /// Apply L v
+    fn map(&self, v: &V) -> V;
+    /// Apply L^{\dag} v
+    fn conj_map(&self, v: &V) -> V;
+    /// Apply L^{\dag} L v
+    fn positive_map(&self, v: &V) -> V
+    {
+        return self.conj_map(&self.map(v))
+    }
+
+    fn add_map_to(&self, v: &V, target: &mut V);
+    fn add_conj_map_to(&self, v: &V, target: &mut V);
+    fn add_positive_map_to(&self, v: &V, target: &mut V);
+
+    fn positive_ev(&self, v: &V) -> N::R;
+}
+
+pub struct QRSLinearCombination;
+
+
+impl<N: ComplexScalar, V> vec_ode::LinearCombination<N, V> for QRSLinearCombination
+where V : QObj<N>
+{
+    fn scale(v: &mut V, k: N) {
+        v.qscal(k);
+    }
+
+    fn scalar_multiply_to(v: &V, k: N, target: &mut V) {
+        use num_traits::Zero;
+        target.qaxby(k, v, N::zero());
+    }
+
+    fn add_scalar_mul(v: &mut V, k: N, other: &V) {
+       v.qaxpy(k, other);
+    }
+
+    fn add_assign_ref(v: &mut V, other: &V) {
+        use num_traits::One;
+        v.qaxpy(N::one(), other);
+    }
+
+    fn delta(v: &mut V, y: &V) {
+        use num_traits::One;
+        v.qaxpy(-N::one(), y)
+    }
+}
+

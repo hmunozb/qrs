@@ -7,6 +7,8 @@ use crate::quantum::*;
 use crate::util::array::{kronecker, gemm, change_basis};
 //use ndarray_linalg::{QR, Lapack};
 use lapack_traits::LapackScalar;
+use crate::ComplexScalar;
+use ndarray_linalg::Norm;
 
 //use ndarray_linalg::eigh::Eigh;
 
@@ -83,6 +85,21 @@ impl<N: Scalar > QRep<N> for DenseQRep<N>
         ket_y.zip_mut_with(ket_x, |y,&x| *y += a* x );
     }
 
+}
+
+impl<N: Scalar> NormedQRep<N> for DenseQRep<N>{
+    fn ket_norm_sq(v: &Self::KetRep) -> <N as ComplexScalar>::R {
+        use num_traits::Zero;
+        v.iter().fold(Zero::zero(), |acc, &g|
+            acc + g.modulus_squared())
+
+    }
+
+    fn ket_norm(v: &Self::KetRep) -> <N as ComplexScalar>::R {
+        use num_traits::real::Real;
+        let norm_sq: N::R = Self::ket_norm_sq(v);
+        return <N::R as Real>::sqrt(norm_sq);
+    }
 }
 
 // impl<N: Scalar > EigQRep<N> for DenseQRep<N>
