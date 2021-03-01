@@ -439,12 +439,10 @@ mod tests{
 
     use super::*;
 
-    extern crate simple_logger;
+    use simple_logger::SimpleLogger;
 
     #[test]
     fn single_qubit_time_ind_ame(){
-        simple_logger::init_with_level(log::Level::Debug).unwrap();
-
         let eta = 1.0e-4;
         let omega_c = 2.0 * f64::pi() * 4.0 ;
         let temp_mk = 12.1;
@@ -486,8 +484,6 @@ mod tests{
 
     #[test]
     fn single_qubit_ame(){
-        //simple_logger::init_with_level(log::Level::Debug).unwrap();
-        simple_logger::init_with_level(log::Level::Info).unwrap();
         let eta = 1.0e-4;
         let omega_c = 2.0 * f64::pi() * 4.0 ;
         let temp_mk = 12.1;
