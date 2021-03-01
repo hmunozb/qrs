@@ -89,14 +89,14 @@ where C::R : SampleUniform + Into<R> ,
          };
         // Not bothering to preserve the norm
         let mut solver = RK45Solver::new_with_lc(f, t0, tf, psi0.clone(), dt, QRSLinearCombination);
-        let mut prev_r = Q::ket_norm(&solver.ode_data().x);
+        let mut prev_r = Q::ket_norm_sq(&solver.ode_data().x);
         let mut prev_x = psi0.clone();
         let mut prev_t = t0;
         loop {
             let step = solver.step();
             match step{
                 ODEState::Ok(_) => {
-                    let r = Q::ket_norm(&solver.ode_data().x);
+                    let r = Q::ket_norm_sq(&solver.ode_data().x);
                     let dr = prev_r - r;
                     let remaining_r: C::R = r - rf;
                     let tol : C::R = atol + rtol * remaining_r.max(C::R::zero());
@@ -128,7 +128,7 @@ where C::R : SampleUniform + Into<R> ,
                     prev_r = r;
                 }
                 ODEState::Done => {
-                    let r = Q::ket_norm(&solver.ode_data().x);
+                    let r = Q::ket_norm_sq(&solver.ode_data().x);
                     let (tf, psif) = solver.into_current();
                     return (psif, JumpType::NoJump(tf));
                 }
