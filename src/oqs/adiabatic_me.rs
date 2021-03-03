@@ -32,6 +32,7 @@ use crate::util::diff::four_point_gl;
 use crate::adiab::{diabatic_driver, AdiabaticPartitioner};
 
 use super::ame_liouv::{Scalar, AMEWorkpad, ame_liouvillian};
+use crate::oqs::ame_liouv::AMEEvalType;
 //use alga::linear::NormedSpace;
 
 static AME_DIS_KINETIC_SCALE_LIM : f64 = 5.0e-1;
@@ -152,7 +153,7 @@ impl<'a, B: Bath<f64>> AME<'a, B> {
     /// Replace the lindblad operators with the truncated basis of the
     /// pth partition
     /// (todo: should be modified when adaptive basis sizes are available)
-    fn load_partition(&mut self, p: usize){
+    pub fn load_partition(&mut self, p: usize){
         self.adb.load_partition(p);
         self.p_lindblad_ops.clear();
         for lind in self.lindblad_ops{
@@ -181,7 +182,8 @@ impl<'a, B: Bath<f64>> AME<'a, B> {
     pub fn adiabatic_lind(&mut self){
         ame_liouvillian(self.bath, &mut self.work, &self.a_eigvals, &self.a_eigvecs,
                         &mut self.adiab_haml, &mut self.lind_pauli, &mut self.lind_coh,
-                        &self.p_lindblad_ops );
+                        &self.p_lindblad_ops, AMEEvalType::Default
+        );
     }
 
     // /// Evaluates the diabatic perturbation  -K_A(t)  to second order with spacing dt
@@ -190,6 +192,16 @@ impl<'a, B: Bath<f64>> AME<'a, B> {
     // pub fn diabatic_driver(&mut self, t: f64, p: usize, dt: f64){
     //     diabatic_driver(t, p, dt, &mut self.haml, & self.eigvals, &self.eigvecs, &mut self.diab_k);
     // }
+
+    fn generate_sparse_lindops(&mut self, t: f64, prev_t : f64){
+        let tf = t + 2.0 * (t - prev_t);
+        self.adb.step_eigvs(prev_t, tf);
+        // \sum_{alpha} g[a,b] A[a,b]
+        ame_liouvillian(self.bath, &mut self.work, &self.a_eigvals, &self.a_eigvecs,
+                        &mut self.adiab_haml, &mut self.lind_pauli, &mut self.lind_coh,
+                        &self.p_lindblad_ops, AMEEvalType::Simple);
+
+    }
 
     /// This function currently has a lot of very specialized handling for keeping
     /// track of the eigenvectors at the endpoints (t0, tf) of each integration steps

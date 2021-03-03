@@ -10,6 +10,14 @@ use num_traits::Zero;
 pub trait Scalar : ComplexScalar + LapackScalar { }
 impl<N> Scalar for N where N: ComplexScalar + LapackScalar{ }
 
+#[derive(Copy, Clone)]
+pub enum AMEEvalType{
+    /// Perform the full evaluation of the AME Liouvillian
+    Default,
+    /// Evaluate only the rates and Lamb shift
+    Simple
+}
+
 pub struct AMEWorkpad<R: RealScalar>{
     omega: DMatrix<R>,
     gamma: DMatrix<R>,
@@ -68,7 +76,8 @@ pub fn ame_liouvillian<R: RealScalar, B: Bath<R>>(
     haml: &mut DMatrix<Complex<R>>,
     lind_pauli: &mut DMatrix<Complex<R>>,
     lind_coh: &mut DMatrix<Complex<R>>,
-    lindblad_ops: &Vec<DMatrix<Complex<R>>>
+    lindblad_ops: &Vec<DMatrix<Complex<R>>>,
+    eval_type: AMEEvalType
 )
     where Complex<R> : Scalar<R=R>
 {
@@ -140,6 +149,14 @@ pub fn ame_liouvillian<R: RealScalar, B: Bath<R>>(
     // Back to the Pauli rates
     lind_pauli.zip_apply(&work.gamma,
                          |s, g| s*Complex::from(g));
+
+    // ** Control Flow Exception **
+    // If only simple rates and the lamb shift were requested, we can return now
+    // The lind_pauli matrix now has stored the rate information
+    //     sum_{alpha} gamma[a,b] A_{alpha}[a, b] A_{alpha}^* [a, b]
+    if let AMEEvalType::Simple = eval_type{
+        return
+    }
 
     lind_pauli.fill_diagonal(Complex::zero());
 
