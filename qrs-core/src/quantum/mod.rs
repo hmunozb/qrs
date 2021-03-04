@@ -1,5 +1,7 @@
-use crate::ComplexScalar;
+use crate::{ComplexScalar, RealScalar};
 use std::ops::Index;
+use nalgebra::Norm;
+use std::marker::PhantomData;
 
 pub mod eig;
 
@@ -258,10 +260,18 @@ pub trait LinearOperator<V, N: ComplexScalar>{
     fn positive_ev(&self, v: &V) -> N::R;
 }
 
-pub struct QRSLinearCombination;
+pub struct QRSLinearCombination<N: ComplexScalar>{
+    _phantom: PhantomData<N>
+}
+
+impl<N: ComplexScalar> QRSLinearCombination<N>{
+    pub fn new() -> Self{
+        Self{_phantom: PhantomData}
+    }
+}
 
 
-impl<N: ComplexScalar, V> vec_ode::LinearCombination<N, V> for QRSLinearCombination
+impl<N: ComplexScalar, V> vec_ode::LinearCombination<N, V> for QRSLinearCombination<N>
 where V : QObj<N>
 {
     fn scale(v: &mut V, k: N) {
@@ -288,3 +298,9 @@ where V : QObj<N>
     }
 }
 
+impl<R: RealScalar, N: ComplexScalar, V> vec_ode::Normed<R, V> for QRSLinearCombination<N>
+    where V : QObj<N>, R : From<N::R>, V::Rep : QRep<N, KetRep=V> + NormedQRep<N>{
+    fn norm(v: &V) -> R {
+        From::from(<V::Rep as NormedQRep<N>>::ket_norm(v))
+    }
+}
