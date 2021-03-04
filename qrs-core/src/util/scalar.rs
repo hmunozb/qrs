@@ -13,7 +13,7 @@ impl<R> RealScalar for R where R:
 pub trait ComplexScalar :
 nalgebra::ComplexField<RealField=<Self as ComplexScalar>::R>
 {
-    type R : RealScalar;
+    type R : RealScalar + Into<Self>;
 
     fn i() -> Self;
 }
