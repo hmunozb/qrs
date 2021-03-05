@@ -6,7 +6,7 @@ use nalgebra::Dim;
 use nalgebra::base::storage::StorageMut;
 use vec_ode::LinearCombination;
 
-//use crate::eig::{EigResolver, EigJob, EigRangeData};
+use crate::quantum::NormedQRep;
 use crate::ComplexScalar;
 use crate::quantum::*;
 
@@ -24,23 +24,10 @@ pub struct LC<N> where N: ComplexScalar{
 }
 
 impl<N: ComplexScalar > QRep<N> for DenseQRep<N>
-//where Complex<R>: ComplexScalar<R>
 {
     type KetRep = Ket<N>;
     type BraRep = Bra<N>;
     type OpRep = Op<N>;
-
-    // fn qdim_op(op: &Self::OpRep) -> (usize, usize) {
-    //     return op.shape();
-    // }
-
-    // fn qdim_ket(ket: &Self::KetRep) -> (usize, usize) {
-    //     return ket.len();
-    // }
-
-    //fn qdim_bra(bra: &Self::BraRep) -> usize {
-    //     return bra.len();
-    // }
 
 
     fn qbdot(bra: &Self::BraRep, ket: & Self::KetRep) -> N{
@@ -50,15 +37,6 @@ impl<N: ComplexScalar > QRep<N> for DenseQRep<N>
     fn qdot(u: &Self::KetRep, v: &Self::KetRep) -> N {
         u.dotc(v)
     }
-
-    // fn qswap(bra: &mut Self::BraRep, ket: & mut Self::KetRep){
-    //     for (q,r) in bra.as_mut_slice().iter_mut().zip(
-    //         ket.as_mut_slice().iter_mut()){
-    //         std::mem::swap(q, r);
-    //     }
-    //     bra.conjugate_mut();
-    //     ket.conjugate_mut();
-    // }
 
     fn khemv(op: &Self::OpRep, _alpha: N,
              x: & Self::KetRep, y: &mut Self::KetRep, _beta: N){
@@ -73,27 +51,19 @@ impl<N: ComplexScalar > QRep<N> for DenseQRep<N>
         ket.apply(|q| q*a);
     }
 
-    //fn qscal(a: N, op: &mut Self::OpRep) {op.apply(|q| q*a);}
-
     fn kaxpy(a: N, ket_x: &Self::KetRep, ket_y: &mut Self::KetRep){
         ket_y.zip_apply(ket_x, |x,y| a*x + y);
     }
+}
 
-    // fn eig(op: & Self::OpRep) -> (Vec<R>, Self::OpRep){
-    //     let shape = Self::qdim_op(op);
-    //     assert_eq!(shape.0, shape.1);
-    //
-    //     let mut eiger:EigResolver<N> = EigResolver::new_eiger(
-    //         shape.0 as u32, EigJob::ValsVecs,
-    //         EigRangeData::<R>::all()
-    //     );
-    //     let m = eiger.borrow_matrix();
-    //     m.copy_from(op);
-    //     let (vals, vecs) = eiger.into_eigs();
-    //     let vals: Vec<R> = vals.data.into();
-    //
-    //     (vals, vecs)
-    // }
+impl<N: ComplexScalar > NormedQRep<N> for DenseQRep<N>{
+    fn ket_norm_sq(v: &Self::KetRep) -> <N as ComplexScalar>::R {
+        return v.norm_squared();
+    }
+
+    fn ket_norm(v: &Self::KetRep) -> <N as ComplexScalar>::R {
+        return v.norm();
+    }
 }
 
 impl<N, R, C, S> LinearCombination<N, Matrix<N, R, C, S>> for LC<N>
