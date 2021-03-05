@@ -61,7 +61,7 @@ where C::R : SampleUniform + Into<R> ,
 
     fn dpsi_dt(&mut self, t: R, psi: &Q::KetRep, psi2: &mut Q::KetRep) -> Result<(),()>{
         let (h0, lindops) = (self.lind_op_fn)(t);
-        Q::khemv(&h0, -C::i(), psi, psi2, C::zero() );
+        Q::khemv(&h0, C::one(), psi, psi2, C::zero() );
         let mut psi1 = psi.clone();
         psi1.scal(C::zero());
         for l in lindops.iter(){
@@ -267,7 +267,7 @@ mod tests{
     }
 
     fn eval_time_indp_lind(_t: f64, gamma: f64, beta: f64) -> (Op<c64>, Vec<SparseLinOp>){
-        let h = sz();
+        let h = sz() * ( -c64::i() );
         let l1 = SparseLinOp{i: 0, j: 1, g: gamma};
         let l2 = SparseLinOp{i: 1, j: 0, g: f64::exp(-2.0 * beta)*gamma};
         let lind_ops = vec![l1, l2];
