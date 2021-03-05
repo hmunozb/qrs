@@ -38,13 +38,11 @@ impl<N: ComplexScalar > QRep<N> for DenseQRep<N>
         u.dotc(v)
     }
 
-    fn khemv(op: &Self::OpRep, _alpha: N,
-             x: & Self::KetRep, y: &mut Self::KetRep, _beta: N){
-        //if beta.eq(&N::zero()){
-            op.mul_to(x, y);
-       // } else {
-        //    y.hegemv()
-       // }
+    fn khemv(op: &Self::OpRep, alpha: N,
+             x: & Self::KetRep, y: &mut Self::KetRep, beta: N){
+        use nalgebra::Vector;
+        Vector::gemv(y, alpha, op, x, beta)
+
     }
 
     fn kscal(a: N, ket: &mut Self::KetRep){
