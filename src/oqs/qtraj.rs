@@ -2,7 +2,7 @@ use crate::{RealScalar, ComplexScalar};
 use crate::base::quantum::{QRep, QObj, QRSLinearCombination, QKet, NormedQRep};
 use qrs_core::quantum::LinearOperator;
 use vec_ode::exp::{MidpointExpLinearSolver, ExponentialSplit};
-use vec_ode::{RK45Solver, ODESolver, ODEState, ODESolverBase, AdaptiveODESolver};
+use vec_ode::{RK45Solver, ODESolver, ODEState, ODESolverBase, AdaptiveODESolver, ODEData, ODEStep};
 use rand::Rng;
 use rand_distr::uniform::SampleUniform;
 use rand_distr::Uniform;
@@ -36,12 +36,12 @@ pub struct QtrajPoissonUnravel<R: RealScalar, C: ComplexScalar,
     _phantom: PhantomData<(Q, R, L)>
 }
 
-impl <'a, R: RealScalar, C: ComplexScalar, Q: NormedQRep<C>,
+impl < R: RealScalar, C: ComplexScalar, Q: NormedQRep<C>,
     L: LinearOperator<Q::KetRep, C>,
     F: FnMut(R)->(Q::OpRep, Vec<L>) >
 QtrajPoissonUnravel<R, C, Q, L, F>
 where C::R : SampleUniform + Into<R> ,
-      R: Into<C::R> ,
+      R: Into<C::R> + From<C::R> ,
 {
     pub fn new( lind_op_fn: F  ) -> Self{
         let rand_uniform = Uniform::new(C::R::zero(), C::R::one());
@@ -71,14 +71,19 @@ where C::R : SampleUniform + Into<R> ,
         Q::kaxpy(C::from_subset(&-0.5), &psi1, psi2);
         Ok(())
     }
-
-    pub fn propagate_to_jump<RNG: Rng>(
+    ///
+    /// g: Recording function for &ODEData after each accepted step
+    pub fn propagate_to_jump<RNG: Rng, G>
+    (
             &mut self, t0: R, psi0: &Q::KetRep, dt: R, tf: R,
-            rf: C::R, rng: &mut RNG)
+            rf: C::R, rng: &mut RNG, mut g: G)
     -> (Q::KetRep, JumpType<R, usize>)
     where C: From<R>+From<f64>,
+          f64 : Into<R>,
+          G: FnMut(&ODEData<R, Q::KetRep>) -> (),
     {
         use vec_ode::LinearCombination;
+        use std::convert::From;
         use num_traits::real::Real;
         use qrs_core::util::iter::Sum;
         let atol = self.atol;
@@ -88,14 +93,21 @@ where C::R : SampleUniform + Into<R> ,
             self.dpsi_dt(t, psi, psi2)
          };
         // Not bothering to preserve the norm
-        let mut solver = RK45Solver::new_with_lc(f, t0, tf, psi0.clone(), dt, QRSLinearCombination);
+        let mut solver = RK45Solver::new_with_lc(f, t0, tf, psi0.clone(), dt, QRSLinearCombination::new());
         let mut prev_r = Q::ket_norm_sq(&solver.ode_data().x);
         let mut prev_x = psi0.clone();
         let mut prev_t = t0;
         loop {
-            let step = solver.step();
-            match step{
-                ODEState::Ok(_) => {
+            let state = solver.step_adaptive();
+            match state {
+                ODEState::Ok(step) => {
+                    let dt = match step{
+                        ODEStep::Step(dt) => dt,
+                        ODEStep::Reject | ODEStep::Chkpt => continue, // Disregard a rejection or checkpoint
+                        _ => { panic!("Invalid ODEStep")
+                        }
+                    };
+
                     let r = Q::ket_norm_sq(&solver.ode_data().x);
                     let dr = prev_r - r;
                     let remaining_r: C::R = r - rf;
@@ -108,8 +120,7 @@ where C::R : SampleUniform + Into<R> ,
                         // If r < rf - tol here, but did not jump in the previous iteration,
                         // then dr > tol at this point
                         // Reduce the next step size more aggressively
-                        let h = ode_dat.h;
-                        let next_h : R = R::from(0.5).unwrap() * (tol / dr.abs()).into() *h;
+                        let next_h : R = 0.5.into() * (tol / dr.abs()).into() * dt;
                         ode_dat.reset_step_size(next_h);
                         continue;
                     }
@@ -119,16 +130,18 @@ where C::R : SampleUniform + Into<R> ,
                     }
                     // Make sure dr is small (relative to remaining r and absolutely to r_epsilon)
                     if dr.abs() > tol{
-                        let h = solver.ode_data().h;
-                        let next_h : R = R::from(0.9).unwrap() * (tol.abs() / dr.abs()).into() * h;
+                        let next_h : R = 0.9.into() * (tol.abs() / dr.abs()).into() * dt;
                         solver.ode_data_mut().reset_step_size(next_h);
                     }
+                    // Apply the observer function on the solver and continue to next iteration
+                    g(solver.ode_data());
                     prev_x = solver.ode_data().x.clone();
                     prev_t = solver.ode_data().t;
                     prev_r = r;
                 }
                 ODEState::Done => {
                     let r = Q::ket_norm_sq(&solver.ode_data().x);
+                    g(solver.ode_data());
                     let (tf, psif) = solver.into_current();
                     return (psif, JumpType::NoJump(tf));
                 }
@@ -139,6 +152,7 @@ where C::R : SampleUniform + Into<R> ,
 
         }
         // Evaluate final state and ops
+        g(solver.ode_data());
         let (tf, psif) = solver.into_current();
         let (_, lind_ops) = (self.lind_op_fn)(tf);
 
@@ -275,7 +289,7 @@ mod tests{
 
         while t < tf {
             let rf = rng.sample(rand_uniform);
-            let (psif, jmp) = qt.propagate_to_jump(t, &psi0, dt, tf, rf,  &mut rng);
+            let (psif, jmp) = qt.propagate_to_jump(t, &psi0, dt, tf, rf,  &mut rng,  |_|{});
             psi0 = psif;
             t = jmp.t();
             if let JumpType::Jump(_, i) = jmp{
