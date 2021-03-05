@@ -5,7 +5,7 @@ use qrs_core::reps::matrix::{Ket};
 /// Represents the sparse linear operator
  ///  sqrt(g) | i > < j |
 #[derive(Copy, Clone)]
-struct SparseLinOp<N>{
+pub struct SparseLinOp<N>{
     pub i: u32,
     pub j: u32,
     pub g: N
@@ -70,8 +70,8 @@ use nalgebra::{DVector, ComplexField};
 /// Represents the sparse linear operator
  ///  \sum_i g_ii | i > < i |
 #[derive(Clone)]
-struct DiagonalLinOp<N: ComplexScalar>{
-    diag: Ket<N>
+pub struct DiagonalLinOp<N: ComplexScalar>{
+    pub diag: Ket<N>
 }
 
 impl<N: ComplexScalar> LinearOperator<Ket<N>, N> for DiagonalLinOp<N>{
@@ -91,18 +91,21 @@ impl<N: ComplexScalar> LinearOperator<Ket<N>, N> for DiagonalLinOp<N>{
     }
 
     fn add_map_to(&self, v: &Ket<N>, target: &mut Ket<N>) {
-        target.iter_mut().zip(v.iter().zip(self.diag.iter()))
-            .map(|(t, (&vi, &a))| *t += vi*a);
+        for (t, (&vi, &a)) in target.iter_mut().zip(v.iter().zip(self.diag.iter())){
+            *t += vi * a;
+        }
     }
 
     fn add_conj_map_to(&self, v: &Ket<N>, target: &mut Ket<N>) {
-        target.iter_mut().zip(v.iter().zip(self.diag.iter()))
-            .map(|(t, (&vi, &a))| *t += vi*a.conjugate());
+        for (t, (&vi, &a)) in target.iter_mut().zip(v.iter().zip(self.diag.iter())){
+            *t += vi*a.conjugate()
+        }
     }
 
     fn add_positive_map_to(&self, v: &Ket<N>, target: &mut Ket<N>) {
-        target.iter_mut().zip(v.iter().zip(self.diag.iter()))
-            .map(|(t, (&vi, &a))| *t += vi*a.modulus_squared().into());
+        for (t, (&vi, &a)) in  target.iter_mut().zip(v.iter().zip(self.diag.iter())){
+            *t += vi*a.modulus_squared().into()
+        }
     }
 
     fn positive_ev(&self, v: &Ket<N>) -> <N as ComplexScalar>::R {
