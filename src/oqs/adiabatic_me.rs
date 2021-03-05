@@ -16,7 +16,7 @@ use vec_ode::exp::split_exp::{CommutativeExpSplit, //StrangSplit,
                               SemiComplexO4ExpSplit};
 
 use qrs_core::{ComplexField, RealScalar};
-use qrs_core::quantum::{QObj, QRep};
+use qrs_core::quantum::{QObj, QRep, LinearOperator};
 use qrs_core::reps::matrix::*;
 
 use crate::ComplexScalar;
@@ -24,6 +24,7 @@ use crate::ComplexScalar;
 use crate::ode::super_op::{CoherentExpSplit, DenMatExpiSplit, KineticExpSplit};
 use crate::ode::super_op::MaybeScalePowExp;
 use crate::oqs::bath::Bath;
+use crate::oqs::linops::{DiagonalLinOp, SparseLinOp};
 use crate::util::*;
 use crate::util::degen::{degeneracy_detect, handle_degeneracies,
                          handle_degeneracies_relative, handle_degeneracies_relative_vals,
@@ -89,6 +90,62 @@ pub struct AMEState{
 }
 
 
+pub enum AMESparseLindOp<N: ComplexScalar>{
+    Sparse(SparseLinOp<N>),
+    Diag(DiagonalLinOp<N>)
+}
+
+impl<N: ComplexScalar> LinearOperator<Ket<N>, N> for AMESparseLindOp<N>{
+    fn map(&self, v: &Ket<N>) -> Ket<N> {
+        match self{
+            Self::Sparse(l)=> l.map(v),
+            Self::Diag(l) => l.map(v)
+        }
+    }
+
+    fn conj_map(&self, v: &Ket<N>) -> Ket<N> {
+        match self{
+            Self::Sparse(l)=> l.conj_map(v),
+            Self::Diag(l) => l.conj_map(v)
+        }
+    }
+
+    fn positive_map(&self, v: &Ket<N>) -> Ket<N> {
+        match self{
+            Self::Sparse(l)=> l.positive_map(v),
+            Self::Diag(l) => l.positive_map(v)
+        }
+    }
+
+    fn add_map_to(&self, v: &Ket<N>, target: &mut Ket<N>) {
+        match self{
+            Self::Sparse(l)=> l.add_map_to(v, target),
+            Self::Diag(l) => l.add_map_to(v, target)
+        }
+    }
+
+    fn add_conj_map_to(&self, v: &Ket<N>, target: &mut Ket<N>) {
+        match self{
+            Self::Sparse(l)=> l.add_conj_map_to(v, target),
+            Self::Diag(l) => l.add_conj_map_to(v, target)
+        }
+    }
+
+    fn add_positive_map_to(&self, v: &Ket<N>, target: &mut Ket<N>) {
+        match self{
+            Self::Sparse(l)=> l.add_positive_map_to(v, target),
+            Self::Diag(l) => l.add_positive_map_to(v, target)
+        }
+    }
+
+    fn positive_ev(&self, v: &Ket<N>) -> <N as ComplexScalar>::R {
+        match self{
+            Self::Sparse(l)=> l.positive_ev(v),
+            Self::Diag(l) => l.positive_ev(v)
+        }
+    }
+}
+
 impl AMEResults{
     pub fn change_rho_basis(&self, new_bases: Vec<Op<c64>>) -> Vec<Op<c64>>{
         let mut new_rhos = Vec::new();
@@ -109,7 +166,7 @@ pub struct AME<'a, B: Bath<f64>>{
     // prev_t: Option<(f64,f64)>,
     // prev_eigvecs: (Op<c64>, Op<c64>),
 
-    adb: AdiabaticPartitioner<'a>,
+    pub adb: AdiabaticPartitioner<'a>,
 
     lindblad_ops: &'a Vec<Op<c64>>,
     p_lindblad_ops: Vec<Op<c64>>,
@@ -193,13 +250,35 @@ impl<'a, B: Bath<f64>> AME<'a, B> {
     //     diabatic_driver(t, p, dt, &mut self.haml, & self.eigvals, &self.eigvecs, &mut self.diab_k);
     // }
 
-    fn generate_sparse_lindops(&mut self, t: f64, prev_t : f64){
-        let tf = t + 2.0 * (t - prev_t);
-        self.adb.step_eigvs(prev_t, tf);
+    pub fn generate_sparse_lindops(&mut self, t: f64, dt: f64) -> (Op<c64>, Vec<AMESparseLindOp<c64>>){
+        self.adb.step_eigvs(t-dt/2.0, t+dt/2.0);
+        self.load_eigv_normal(t);
+        // Use the normalized eigvecs calculated for the diabatic driver;
+        let n = self.adiab_haml.shape().0;
+        let mut ka: Op<c64> = Op::zeros(n, n);
+        let (vals, vecs) = self.adb.diabatic_driver(t, dt, &mut ka);
+        self.a_eigvals = vals;
+        self.a_eigvecs = vecs;
         // \sum_{alpha} g[a,b] A[a,b]
         ame_liouvillian(self.bath, &mut self.work, &self.a_eigvals, &self.a_eigvecs,
                         &mut self.adiab_haml, &mut self.lind_pauli, &mut self.lind_coh,
                         &self.p_lindblad_ops, AMEEvalType::Simple);
+        let mut lind_ops = Vec::with_capacity(n*(n-1) + 1);
+        let mut diag : Ket<c64> = Ket::zeros(n);
+        for (i,d) in diag.iter_mut().enumerate(){
+            *d = self.lind_pauli[(i, i)];
+        }
+        lind_ops.push(AMESparseLindOp::Diag(DiagonalLinOp{diag}));
+        for i in 0..n{
+            for j in 0..n{
+                if i != j {
+                    lind_ops.push(AMESparseLindOp::Sparse(
+                        SparseLinOp{i: i as u32, j: j as u32, g: self.lind_pauli[(i, j)]}))
+                }
+            }
+        }
+
+        return (self.adiab_haml.clone(), lind_ops);
 
     }
 
@@ -274,8 +353,8 @@ impl<'a, B: Bath<f64>> AME<'a, B> {
 
 }
 
-
-fn basis_tgts_ampls(basis_tgts: Option<&Vec<usize>>, rho: &Op<c64>, eigv: &Op<c64>, haml: &TimePartHaml<f64>, p: usize) -> Option<Op<c64>>{
+// todo: move this somewhere else
+pub fn basis_tgts_ampls(basis_tgts: Option<&Vec<usize>>, rho: &Op<c64>, eigv: &Op<c64>, haml: &TimePartHaml<f64>, p: usize) -> Option<Op<c64>>{
     if let Some(basis_tgts_vec) = basis_tgts{
         return if basis_tgts_vec.len() > 0 {
             let tgt_proj = haml.sparse_canonical_basis_amplitudes(basis_tgts_vec, p);
