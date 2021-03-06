@@ -50,7 +50,7 @@ impl<N: ComplexScalar > QRep<N> for DenseQRep<N>
     }
 
     fn kaxpy(a: N, ket_x: &Self::KetRep, ket_y: &mut Self::KetRep){
-        ket_y.zip_apply(ket_x, |x,y| a*x + y);
+        ket_y.zip_apply(ket_x, |y,x| a*x + y);
     }
 }
 
