@@ -79,7 +79,7 @@ where C::R : SampleUniform + Into<R> ,
             rf: C::R, rng: &mut RNG, mut g: G)
     -> (Q::KetRep, JumpType<R, usize>)
     where C: From<R>+From<f64>,
-          f64 : Into<R>,
+          f64 : Into<R> + Into<C::R>,
           G: FnMut(&ODEData<R, Q::KetRep>) -> (),
     {
         use vec_ode::LinearCombination;
@@ -93,7 +93,8 @@ where C::R : SampleUniform + Into<R> ,
             self.dpsi_dt(t, psi, psi2)
          };
         // Not bothering to preserve the norm
-        let mut solver = RK45Solver::new_with_lc(f, t0, tf, psi0.clone(), dt, QRSLinearCombination::new());
+        let mut solver = RK45Solver::new_with_lc(f, t0, tf, psi0.clone(), dt, QRSLinearCombination::new())
+            .with_tolerance((1.0e-8).into(), (1.0e-6).into());
         let mut prev_r = Q::ket_norm_sq(&solver.ode_data().x);
         let mut prev_x = psi0.clone();
         let mut prev_t = t0;
@@ -120,7 +121,7 @@ where C::R : SampleUniform + Into<R> ,
                         // If r < rf - tol here, but did not jump in the previous iteration,
                         // then dr > tol at this point
                         // Reduce the next step size more aggressively
-                        let next_h : R = 0.5.into() * (tol / dr.abs()).into() * dt;
+                        let next_h : R =  (tol / dr.abs()).into() * dt * 0.5.into() ;
                         ode_dat.reset_step_size(next_h);
                         continue;
                     }
@@ -130,7 +131,7 @@ where C::R : SampleUniform + Into<R> ,
                     }
                     // Make sure dr is small (relative to remaining r and absolutely to r_epsilon)
                     if dr.abs() > tol{
-                        let next_h : R = 0.9.into() * (tol.abs() / dr.abs()).into() * dt;
+                        let next_h : R =  (tol.abs() / dr.abs()).into() * dt * 0.9.into();
                         solver.ode_data_mut().reset_step_size(next_h);
                     }
                     // Apply the observer function on the solver and continue to next iteration
@@ -191,6 +192,100 @@ where C::R : SampleUniform + Into<R> ,
     }
 }
 
+use crate::oqs::bath::Bath;
+use num_complex::Complex64 as c64;
+use qrs_core::reps::matrix;
+use crate::oqs::adiabatic_me::AME;
+
+/// Solves the adiabatic master equation constructed according to the provided
+/// partitioned Hamiltonian, Lindblad operators, and bath spectral density
+pub fn solve_aqt<B: Bath<f64>>(
+    ame: &mut AME<B>,
+    initial_state: matrix::Ket<c64>,
+    tol: f64,
+    dt_max_frac: f64,
+    basis_tgts: Option<&Vec<usize>>,
+    mut callback: Option<&mut dyn FnMut(&matrix::Ket<c64>)>
+)
+    -> Result<(matrix::Ket<c64>), vec_ode::ODEError>
+{
+    use log::info;
+    use crate::oqs::adiabatic_me::basis_tgts_ampls;
+    use rand::SeedableRng;
+    use rand_xoshiro::Xoshiro256Plus;
+
+    // Important variables
+    let partitions  = ame.adb.haml.partitions().to_owned();
+    let num_partitions = partitions.len() - 1;
+    let n = ame.adb.haml.basis_size() as usize;
+    let t0 = partitions[0];
+    let mut rng = Xoshiro256Plus::from_entropy();
+    let rand_uniform = Uniform::new(0.0, 1.0);
+    let mut norm_est = condest::Normest1::<f64>::new(n, 2);
+    let mut psi0 = initial_state;
+    let mut last_delta_t : Option<f64> = None;
+    //let mut results_vec  = Vec::new();
+
+    // n x n
+    let eigv = ame.adb.haml.eig_p(t0, Some(0)).1;
+
+    callback.as_deref_mut().map(|f| f(&psi0));
+    //results_vec.push(ame_state);
+
+    let mut prev_r = None;
+    // Iterate over each partition
+    for (p, (&ti0, &tif)) in partitions.iter()
+        .zip(partitions.iter().skip(1))
+        .enumerate()
+    {
+        let delta_t = tif - ti0;
+        let max_step = dt_max_frac * delta_t;
+        let min_step = max_step * 1.0e-12;
+        let dt = match last_delta_t{
+            None => dt_max_frac * delta_t / 20.0,
+            Some(dt) => dt.max(1.001*min_step).min(0.999*max_step) };
+
+        info!("Evolving partition {} / {} \t ({}, {})", p+1, num_partitions,
+              ti0, tif);
+        // Prepare evolution for partition p
+        ame.load_partition(p);
+        // Evaluation of dpsi/dt
+        let mut prev_t = ti0;
+        // Need to share and mutate over two lambdas
+        let last_solver_dt = std::cell::Cell::new(dt);
+        let f = |t: f64|{
+            ame.generate_sparse_lindops(t, last_solver_dt.get())
+        };
+        let g = |ode_data: &ODEData<f64, matrix::Ket<c64>>|{
+            let h = ode_data.h;
+            last_solver_dt.set(h);
+        };
+        let mut qt = QtrajPoissonUnravel::<f64, c64, matrix::DenseQRep<c64>, _, _>::new(f);
+
+        //  ** Begin waiting time algorithm **
+        // For time range [ti0, tif]
+        let mut t = ti0;
+
+        while t < tif {
+            let rf = prev_r.unwrap_or(rng.sample(rand_uniform));
+            let (psif, jmp) = qt.propagate_to_jump(t, &psi0, last_solver_dt.get(), tif, rf,  &mut rng,  g);
+            psi0 = psif;
+            t = jmp.t();
+            if let JumpType::Jump(_, i) = jmp {
+                println!("t = {}, Jump {} ", t, i);
+                prev_r = None;
+            } else {
+                // If propagation terminates with no jump, continue from the last r
+                prev_r = Some(rf)
+            }
+        }
+        last_delta_t = Some(last_solver_dt.get());
+        // Callback on wave function after each time range
+        callback.as_deref_mut().map(|f| f(&psi0));
+    }
+
+    Ok(psi0)
+}
 
 #[cfg(test)]
 mod tests{
