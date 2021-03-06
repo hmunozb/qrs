@@ -251,24 +251,30 @@ impl<'a, B: Bath<f64>> AME<'a, B> {
     // }
 
     pub fn generate_sparse_lindops(&mut self, t: f64, dt: f64) -> (Op<c64>, Vec<AMESparseLindOp<c64>>){
-        self.adb.step_eigvs(t-dt/2.0, t+dt/2.0);
-        self.load_eigv_normal(t);
         // Use the normalized eigvecs calculated for the diabatic driver;
         let n = self.adiab_haml.shape().0;
         let mut ka: Op<c64> = Op::zeros(n, n);
+        let mut haml: Op<c64> = Op::zeros(n, n);
         let (vals, vecs) = self.adb.diabatic_driver(t, dt, &mut ka);
+        ka *= -c64::i();
         self.a_eigvals = vals;
         self.a_eigvecs = vecs;
+        for i in 0..n{
+            unsafe{ *haml.get_unchecked_mut((i, i)) = (*self.a_eigvals.get_unchecked_mut(i)).into()};
+        }
+        haml *= -c64::i();
+        haml += ka;
         // \sum_{alpha} g[a,b] A[a,b]
         ame_liouvillian(self.bath, &mut self.work, &self.a_eigvals, &self.a_eigvecs,
                         &mut self.adiab_haml, &mut self.lind_pauli, &mut self.lind_coh,
                         &self.p_lindblad_ops, AMEEvalType::Simple);
+
         let mut lind_ops = Vec::with_capacity(n*(n-1) + 1);
-        let mut diag : Ket<c64> = Ket::zeros(n);
-        for (i,d) in diag.iter_mut().enumerate(){
+        let mut lind_diag: Ket<c64> = Ket::zeros(n);
+        for (i,d) in lind_diag.iter_mut().enumerate(){
             *d = self.lind_pauli[(i, i)];
         }
-        lind_ops.push(AMESparseLindOp::Diag(DiagonalLinOp{diag}));
+        lind_ops.push(AMESparseLindOp::Diag(DiagonalLinOp{ diag: lind_diag }));
         for i in 0..n{
             for j in 0..n{
                 if i != j {
@@ -278,7 +284,7 @@ impl<'a, B: Bath<f64>> AME<'a, B> {
             }
         }
 
-        return (self.adiab_haml.clone(), lind_ops);
+        return (haml, lind_ops);
 
     }
 
