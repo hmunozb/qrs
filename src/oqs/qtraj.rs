@@ -33,7 +33,8 @@ pub struct QtrajPoissonUnravel<R: RealScalar, C: ComplexScalar,
     rand_uniform: Uniform<C::RealField>,
     rtol: C::R,
     atol: C::R,
-    _phantom: PhantomData<(Q, R, L)>
+    last_lind_ops: Option<Vec<L>>,
+    _phantom: PhantomData<(Q, R)>
 }
 
 impl < R: RealScalar, C: ComplexScalar, Q: NormedQRep<C>,
@@ -47,7 +48,7 @@ where C::R : SampleUniform + Into<R> ,
         let rand_uniform = Uniform::new(C::R::zero(), C::R::one());
         let rtol = NumCast::from(1.0e-2).unwrap();
         let atol = NumCast::from(1.0e-4).unwrap();
-        return Self{ lind_op_fn, rand_uniform, rtol, atol, _phantom: PhantomData}
+        return Self{ lind_op_fn, rand_uniform, rtol, atol, last_lind_ops: None, _phantom: PhantomData}
     }
     /// Set relative tolerance on norm loss (Default 1.0e-2)
     pub fn with_rtol(self, rtol: C::R) -> Self{
@@ -72,7 +73,7 @@ where C::R : SampleUniform + Into<R> ,
         Ok(())
     }
     ///
-    /// g: Recording function for &ODEData after each accepted step
+    /// g: Recording function for &ODEData before each step
     pub fn propagate_to_jump<RNG: Rng, G>
     (
             &mut self, t0: R, psi0: &Q::KetRep, dt: R, tf: R,
@@ -99,6 +100,7 @@ where C::R : SampleUniform + Into<R> ,
         let mut prev_x = psi0.clone();
         let mut prev_t = t0;
         loop {
+            g(&solver.ode_data());
             let state = solver.step_adaptive();
             match state {
                 ODEState::Ok(step) => {
@@ -135,14 +137,12 @@ where C::R : SampleUniform + Into<R> ,
                         solver.ode_data_mut().reset_step_size(next_h);
                     }
                     // Apply the observer function on the solver and continue to next iteration
-                    g(solver.ode_data());
                     prev_x = solver.ode_data().x.clone();
                     prev_t = solver.ode_data().t;
                     prev_r = r;
                 }
                 ODEState::Done => {
                     let r = Q::ket_norm_sq(&solver.ode_data().x);
-                    g(solver.ode_data());
                     let (tf, psif) = solver.into_current();
                     return (psif, JumpType::NoJump(tf));
                 }
@@ -153,7 +153,6 @@ where C::R : SampleUniform + Into<R> ,
 
         }
         // Evaluate final state and ops
-        g(solver.ode_data());
         let (tf, psif) = solver.into_current();
         let (_, lind_ops) = (self.lind_op_fn)(tf);
 
@@ -186,7 +185,7 @@ where C::R : SampleUniform + Into<R> ,
         let mut psif_jmp = lind_i.map(&psif);
         let psif_norm = Q::ket_norm(&psif_jmp);
         Q::krscal(psif_norm.recip(), &mut psif_jmp);
-
+        self.last_lind_ops = Some(lind_ops);
         return (psif_jmp, JumpType::Jump(tf,i_jmp));
 
     }
@@ -224,10 +223,6 @@ pub fn solve_aqt<B: Bath<f64>>(
     let mut norm_est = condest::Normest1::<f64>::new(n, 2);
     let mut psi0 = initial_state;
     let mut last_delta_t : Option<f64> = None;
-    //let mut results_vec  = Vec::new();
-
-    // n x n
-    let eigv = ame.adb.haml.eig_p(t0, Some(0)).1;
 
     callback.as_deref_mut().map(|f| f(&psi0));
     //results_vec.push(ame_state);
@@ -250,15 +245,27 @@ pub fn solve_aqt<B: Bath<f64>>(
         // Prepare evolution for partition p
         ame.load_partition(p);
         // Evaluation of dpsi/dt
-        let mut prev_t = ti0;
+
         // Need to share and mutate over two lambdas
         let last_solver_dt = std::cell::Cell::new(dt);
+        let solver_step_t0 = std::cell::Cell::new(0.0);
+        let solver_step_tf = std::cell::Cell::new(dt);
         let f = |t: f64|{
-            ame.generate_sparse_lindops(t, last_solver_dt.get())
+            let dt = last_solver_dt.get();
+            let t0 = solver_step_t0.get();
+            let tf = solver_step_tf.get();
+            ame.adb.step_eigvs(t0, tf);
+            ame.generate_sparse_lindops(t, last_solver_dt.get() * 0.25)
         };
+        // Function to evaluate before each attempted step
+        // Updates the step size and time interval for ame.adb evaluation
         let g = |ode_data: &ODEData<f64, matrix::Ket<c64>>|{
-            let h = ode_data.h;
+            let h = ode_data.step_size().unwrap_dt_or(last_solver_dt.get());
+            let t0 = ode_data.t;
+            let tf = t0 + h;
             last_solver_dt.set(h);
+            solver_step_t0.set(t0);
+            solver_step_tf.set(tf);
         };
         let mut qt = QtrajPoissonUnravel::<f64, c64, matrix::DenseQRep<c64>, _, _>::new(f);
 
