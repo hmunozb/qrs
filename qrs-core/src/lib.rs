@@ -17,6 +17,8 @@ pub use nalgebra::{SimdComplexField, SimdRealField};
 
 pub use util::scalar::{RealScalar, ComplexScalar};
 
+pub use num_complex;
+
 #[cfg(test)]
 mod tests {
     extern crate openblas_src;
