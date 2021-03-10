@@ -255,10 +255,12 @@ impl<'a, B: Bath<f64>> AME<'a, B> {
         let n = self.adiab_haml.shape().0;
         let mut ka: Op<c64> = Op::zeros(n, n);
         let mut haml: Op<c64> = Op::zeros(n, n);
-        let (vals, vecs) = self.adb.diabatic_driver(t, dt, &mut ka);
+        self.adb.diabatic_driver(t, dt, &mut ka);
+        let vals = &self.adb.eigvals;
+        let vecs = &self.adb.eigvecs;
         ka *= -c64::i();
-        self.a_eigvals = vals;
-        self.a_eigvecs = vecs;
+        self.a_eigvals = vals.clone();
+        self.a_eigvecs = (*vecs).clone();
         for i in 0..n{
             unsafe{ *haml.get_unchecked_mut((i, i)) = (*self.a_eigvals.get_unchecked_mut(i)).into()};
         }

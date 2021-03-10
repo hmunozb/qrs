@@ -156,8 +156,8 @@ impl<'a> AdiabaticPartitioner<'a>{
     /// The eigenvectors are evaluated with normal phase and degeneracy to ensure
     /// numerical stability
     ///
-    /// Also returns the tuple (vals, vecs) evaluated at t
-    pub fn diabatic_driver(&mut self, t: f64, dt: f64, diab_k: &mut Op<c64>) -> (Ket<f64>, Op<c64>){
+    /// Also stores (vals, vecs) evaluated at t into self.eigvals, self.eigvecs
+    pub fn diabatic_driver(&mut self, t: f64, dt: f64, diab_k: &mut Op<c64>){
 
         let (eigvals, eigvecs) = self.normalized_eigv(t);
         let (_vals1, vecs1) =  self.normalized_eigv(t-dt);
@@ -178,7 +178,8 @@ impl<'a> AdiabaticPartitioner<'a>{
         *diab_k += &temp;
         *diab_k /= Complex::from(2.0);
 
-        (eigvals, eigvecs)
+        self.eigvals = eigvals;
+        self.eigvecs = eigvecs;
     }
 
     fn reset_eigvs(&mut self, t0: f64, tf: f64){
