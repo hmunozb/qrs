@@ -207,6 +207,9 @@ impl<'a, B: Bath<f64>> AME<'a, B> {
         me
     }
 
+    pub fn workpad(&self) -> &AMEWorkpad<f64>{
+        return &self.work;
+    }
     /// Replace the lindblad operators with the truncated basis of the
     /// pth partition
     /// (todo: should be modified when adaptive basis sizes are available)
