@@ -19,15 +19,15 @@ pub enum AMEEvalType{
 }
 
 pub struct AMEWorkpad<R: RealScalar>{
-    omega: DMatrix<R>,
-    gamma: DMatrix<R>,
-    linds_ab: Vec<DMatrix<Complex<R>>>,
-    gamma_out: DVector<Complex<R>>,
-    lind_coh_1: DMatrix<Complex<R>>,
-    lind_coh_2: DMatrix<Complex<R>>,
-    diag_gamma_0:  DMatrix<Complex<R>>,
-    lamb_shift: DMatrix<Complex<R>>,
-    ztemp0: DMatrix<Complex<R>>
+    pub omega: DMatrix<R>,
+    pub gamma: DMatrix<R>,
+    pub linds_ab: Vec<DMatrix<Complex<R>>>,
+    pub gamma_out: DVector<Complex<R>>,
+    pub lind_coh_1: DMatrix<Complex<R>>,
+    pub lind_coh_2: DMatrix<Complex<R>>,
+    pub diag_gamma_0:  DMatrix<Complex<R>>,
+    pub lamb_shift: DMatrix<Complex<R>>,
+    pub ztemp0: DMatrix<Complex<R>>
 }
 
 impl<R: RealScalar> AMEWorkpad<R>{
