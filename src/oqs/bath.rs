@@ -141,7 +141,7 @@ where Complex<N> : ComplexField<RealField=N>
     }
 
     fn tau_b_sb(&self) -> Option<(N, N)> {
-        let mut qagiu = QAGIU::new(100, 0.0);
+        // let mut qagiu = QAGIU::new(100, 0.0);
         // let resiu_b = qagiu.integrate(
         //     |t: f64| t * self.cor(N::from_f64(t).unwrap()).norm().to_f64().unwrap(),
         //  1.0e-8, 1.0e-8).unwrap();

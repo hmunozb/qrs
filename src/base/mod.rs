@@ -1,6 +1,6 @@
 pub mod quantum;
 
-mod canonical;
+//mod canonical;
 pub mod pauli;
 pub mod dense;
 

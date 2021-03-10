@@ -206,7 +206,7 @@ pub fn solve_aqt<B: Bath<f64>>(
     basis_tgts: Option<&Vec<usize>>,
     mut callback: Option<&mut dyn FnMut(&matrix::Ket<c64>)>
 )
-    -> Result<(matrix::Ket<c64>), vec_ode::ODEError>
+    -> Result<matrix::Ket<c64>, vec_ode::ODEError>
 {
     use log::info;
     use crate::oqs::adiabatic_me::basis_tgts_ampls;
@@ -220,7 +220,6 @@ pub fn solve_aqt<B: Bath<f64>>(
     let t0 = partitions[0];
     let mut rng = Xoshiro256Plus::from_entropy();
     let rand_uniform = Uniform::new(0.0, 1.0);
-    let mut norm_est = condest::Normest1::<f64>::new(n, 2);
     let mut psi0 = initial_state;
     let mut last_delta_t : Option<f64> = None;
 
