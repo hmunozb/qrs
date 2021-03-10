@@ -1,6 +1,5 @@
 use crate::{ComplexScalar, RealScalar};
 use std::ops::Index;
-use nalgebra::Norm;
 use std::marker::PhantomData;
 
 pub mod eig;
@@ -152,7 +151,12 @@ pub trait QKet<N: ComplexScalar>: QObj<N>
 
     //fn qdim(&self) -> usize;
 
-    fn qdot(&self, other: & <<Self as QObj<N>>::Rep as QRep<N>>::BraRep) -> N{
+    /// Take the dot product of this ket with the conjugate of another
+    fn qdot(&self, other: & Self) -> N{
+        <Self::Rep as QRep<N>>::qdot(other, self)
+    }
+
+    fn qbdot(&self, other: & <<Self as QObj<N>>::Rep as QRep<N>>::BraRep) -> N{
         <Self::Rep as QRep<N>>::qbdot(other, self)
     }
     fn scal(&mut self, a: N) {
@@ -166,7 +170,7 @@ pub trait QBra<N: ComplexScalar>: QObj<N>
 {
     //type Rep: QRep<N, BraRep=Self>;
 
-    fn qdot(&self, other: &<<Self as QObj<N>>::Rep as QRep<N>>::KetRep) -> N{
+    fn qbdot(&self, other: &<<Self as QObj<N>>::Rep as QRep<N>>::KetRep) -> N{
         <Self::Rep as QRep<N>>::qbdot(self, other)
     }
 
@@ -194,7 +198,7 @@ pub fn qdot<QB, QK, QR, N>(bra: &QB, ket: &QK) -> N
           QB: QBra<N, Rep=QR>,
           QK: QKet<N, Rep=QR>
 {
-    bra.qdot(ket)
+    bra.qbdot(ket)
 }
 
 
@@ -279,7 +283,6 @@ where V : QObj<N>
     }
 
     fn scalar_multiply_to(v: &V, k: N, target: &mut V) {
-        use num_traits::Zero;
         target.qaxby(k, v, N::zero());
     }
 
@@ -288,12 +291,10 @@ where V : QObj<N>
     }
 
     fn add_assign_ref(v: &mut V, other: &V) {
-        use num_traits::One;
         v.qaxpy(N::one(), other);
     }
 
     fn delta(v: &mut V, y: &V) {
-        use num_traits::One;
         v.qaxpy(-N::one(), y)
     }
 }

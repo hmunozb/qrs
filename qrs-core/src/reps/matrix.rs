@@ -221,7 +221,7 @@ mod tests{
         let a : Bra<f64> = Bra::zeros(3);
         let b : Ket<f64> = Ket::zeros(3);
         //b.qdot(a);
-        let c = QBra::qdot(&a, &b);
+        let c = QBra::qbdot(&a, &b);
         let d = qdot(&a, &b);
     }
 }
