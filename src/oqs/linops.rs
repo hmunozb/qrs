@@ -115,3 +115,62 @@ impl<N: ComplexScalar> LinearOperator<Ket<N>, N> for DiagonalLinOp<N>{
                   |acc, (&vi, &a)| acc + vi.modulus_squared() * a.modulus_squared())
     }
 }
+
+#[derive(Copy, Clone)]
+pub enum CombinedLinOp<L1, L2>{
+    L1(L1),
+    L2(L2),
+}
+
+impl<V, N: ComplexScalar, L1, L2> LinearOperator<V, N> for CombinedLinOp<L1, L2>
+where  L1: LinearOperator<V,N>, L2:LinearOperator<V, N>
+{
+    fn map(&self, v: &V) -> V {
+        match self{
+            Self::L1(l)=> l.map(v),
+            Self::L2(l) => l.map(v)
+        }
+    }
+
+    fn conj_map(&self, v: &V) -> V {
+        match self{
+            Self::L1(l)=> l.conj_map(v),
+            Self::L2(l) => l.conj_map(v)
+        }
+    }
+
+    fn positive_map(&self, v: &V) -> V {
+        match self{
+            Self::L1(l)=> l.positive_map(v),
+            Self::L2(l) => l.positive_map(v)
+        }
+    }
+
+    fn add_map_to(&self, v: &V, target: &mut V) {
+        match self{
+            Self::L1(l)=> l.add_map_to(v, target),
+            Self::L2(l) => l.add_map_to(v, target)
+        }
+    }
+
+    fn add_conj_map_to(&self, v: &V, target: &mut V) {
+        match self{
+            Self::L1(l)=> l.add_conj_map_to(v, target),
+            Self::L2(l) => l.add_conj_map_to(v, target)
+        }
+    }
+
+    fn add_positive_map_to(&self, v: &V, target: &mut V) {
+        match self{
+            Self::L1(l)=> l.add_positive_map_to(v, target),
+            Self::L2(l) => l.add_positive_map_to(v, target)
+        }
+    }
+
+    fn positive_ev(&self, v: &V) -> <N as ComplexScalar>::R {
+        match self{
+            Self::L1(l)=> l.positive_ev(v),
+            Self::L2(l) => l.positive_ev(v)
+        }
+    }
+}
