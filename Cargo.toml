@@ -27,7 +27,7 @@ num-complex = {version="0.2", features=["serde"]}
 num-traits = "0.2.8"
 ndarray = {version="0.13", features=["rayon"]}
 ndarray-linalg = "0.12"
-complex-polygamma = {git="https://github.com/hmunozb/complex-polygamma.git"}
+complex-polygamma = {git="ssh://git@github.com/hmunozb/complex-polygamma.git"}
 log = "0.4.8"
 nalgebra = {version="0.21", features=["serde-serialize"]}
 qrs-core = {path="qrs-core"}
@@ -41,7 +41,7 @@ simd-phys = {git="https://github.com/hmunozb/simd-phys-rs.git"}
 spin-langevin = {git="https://github.com/hmunozb/spin-langevin.git"}
 smallvec = "1.0.0"
 ndarray-stats = "0.3"
-vec_ode = {git="https://github.com/hmunozb/vec-ode.git"}
+vec_ode = {git="https://github.com/hmunozb/vec-ode.git", branch="qrs-dep"}
 
 [dev-dependencies]
 criterion = "0.3"

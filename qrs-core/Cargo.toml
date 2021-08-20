@@ -21,7 +21,7 @@ num-complex = "0.2"
 num-traits = "0.2"
 simba = "0.1"
 sprs = "0.7"
-vec_ode = {git="https://github.com/hmunozb/vec-ode.git"}
+vec_ode = {git="https://github.com/hmunozb/vec-ode.git", branch="qrs-dep"}
 
 [dev-dependencies]
 openblas-src = {version = "0.9.0", default-features=false, features=["system"]}
