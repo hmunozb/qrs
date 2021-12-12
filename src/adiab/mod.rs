@@ -128,7 +128,7 @@ impl<'a> AdiabaticPartitioner<'a>{
 
     /// Loads the eigenvalues and eigenvectors of time t at the current partition
     /// No gauge or degeneracy handling
-    pub fn load_eigv(& self, t: f64) -> (Ket<f64>, Op<c64>){
+    pub fn eigv(& self, t: f64) -> (Ket<f64>, Op<c64>){
         let (vals, vecs) =
             self.haml.eig_p(t, Some(self.p ));
         (vals, vecs)
@@ -183,7 +183,7 @@ impl<'a> AdiabaticPartitioner<'a>{
     }
 
     fn reset_eigvs(&mut self, t0: f64, tf: f64){
-        let (_, v0) = self.load_eigv(t0);
+        let (_, v0) = self.eigv(t0);
         let (_, mut vf) = self.eigv_degen_handle(tf,  &v0);
         handle_relative_phases(&mut vf, &v0, &mut self.ztemp);
         self.interval_eigvecs.0 = v0;
@@ -222,7 +222,7 @@ impl<'a> AdiabaticPartitioner<'a>{
                     // For now, this simply behaves like the time reversal of the rejection case
                     warn!("generate_split: An generally impossible branch was reached. (sf==tf)");
                     let vf = &self.interval_eigvecs.1;
-                    let (_, mut v0) = self.load_eigv(t0);
+                    let (_, mut v0) = self.eigv(t0);
                     handle_relative_phases(&mut v0, vf, &mut self.ztemp);
                     self.interval_eigvecs.0 = v0;
                 } else {
