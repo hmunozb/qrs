@@ -126,12 +126,20 @@ impl<'a> AdiabaticPartitioner<'a>{
         self.haml.transform_to_partition(op, self.p )
     }
 
-    /// Loads the eigenvalues and eigenvectors of time t at the current partition
+    /// Evaluates the eigenvalues and eigenvectors of time t at the current partition
     /// No gauge or degeneracy handling
     pub fn eigv(& self, t: f64) -> (Ket<f64>, Op<c64>){
         let (vals, vecs) =
             self.haml.eig_p(t, Some(self.p ));
         (vals, vecs)
+    }
+
+    /// Evaluates the eigenvalues and eigenvectors of time t at the current partition
+    /// and stores them in self.eigvals and self.eigvecs
+    pub fn load_eigv(&mut self, t: f64){
+        let (eigvals, eigvecs) = self.normalized_eigv(t);
+        self.eigvals = eigvals;
+        self.eigvecs = eigvecs;
     }
 
     /// Loads the eigenvalues and eigenvectors of time t at the current partition
