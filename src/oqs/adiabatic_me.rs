@@ -7,7 +7,8 @@ use num_complex::Complex64 as c64;
 use num_traits::{Float, Zero};
 use smallvec::SmallVec;
 use serde::{Serialize, Deserialize};
-use vec_ode::{LinearCombination, LinearCombinationSpace, ODEError, ODESolver, ODESolverBase, ODEState, ODEStep};
+use vec_ode::lc::{LinearCombination, LinearCombinationSpace};
+use vec_ode::{ODEError, ODESolver, ODEState, ODEStep};
 use vec_ode::AdaptiveODESolver;
 use vec_ode::exp::{DirectSumL, ExponentialSplit};
 use vec_ode::exp::cfm::ExpCFMSolver;
@@ -205,6 +206,11 @@ impl<'a, B: Bath<f64>> AME<'a, B> {
         };
         me.load_partition(0);
         me
+    }
+
+    pub fn gibbs_state(&mut self, t: f64, beta: f64){
+        let (vals, vecs) = self.adb.eigv(t);
+
     }
 
     pub fn workpad(&self) -> &AMEWorkpad<f64>{
