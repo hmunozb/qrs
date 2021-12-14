@@ -25,7 +25,7 @@ where N::R : Real
     let (vals, vecs) = q_eiger.eigh(haml);
     let n = vals.len();
     let mut vals : Array1<N::R> = Array1::from(vals);
-    let &e0 = vals.min().unwrap();
+    let &e0 = QuantileExt::min(&vals).unwrap();
     for e in vals.iter_mut(){
         *e -= e0;
     }

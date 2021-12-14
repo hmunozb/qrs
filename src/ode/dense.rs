@@ -3,7 +3,7 @@ use std::iter::FromIterator;
 use itertools::Itertools;
 use num_complex::Complex;
 use num_traits::Float;
-use vec_ode::{AdaptiveODESolver, LinearCombination, ODESolver, ODESolverBase, ODEState};
+use vec_ode::{AdaptiveODESolver, LinearCombination, ODESolver, ODEState};
 use vec_ode::exp::{Commutator, ExponentialSplit, NormedExponentialSplit};
 use vec_ode::exp::{ExpSplitMidpointSolver, MidpointExpLinearSolver};
 use vec_ode::exp::cfm::ExpCFMSolver;
@@ -57,7 +57,7 @@ where Complex<T> : EigScalar<R=T>
 
         let expivals: Vec<Complex<T>> = Vec::from_iter(
             vals.into_iter().map(|v|
-                Complex::exp(&(-Complex::i() * Complex::from(v))) ));
+                Complex::exp(-Complex::i() * Complex::from(v)) ));
         let expivals = Ket::from_column_slice(&expivals);
         (expivals, vecs)
     }
@@ -78,7 +78,7 @@ where Complex<T> : EigScalar<R=T>
         let mut u_vec = Vec::new();
         for &k in k_arr{
             let expivals : Vec<Complex<T>> = vals.iter().map(
-                |v|  Complex::exp(&(-Complex::i() * k * Complex::from(v))))
+                |v|  Complex::exp(-Complex::i() * k * Complex::from(v)) )
                 .collect_vec();
             let expivals_arr = Ket::from_column_slice(&expivals);
             u_vec.push((expivals_arr, vecs.clone()))

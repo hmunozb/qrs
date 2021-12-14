@@ -1,11 +1,12 @@
 use cblas::{Layout, Transpose};
 use itertools::Itertools;
-use lapack_traits::LapackScalar;
+use lapack_traits::{LapackScalar, LComplexField};
 use nalgebra::{DMatrix, Matrix, Vector};
 use nalgebra::{Dim, Scalar, U1};
-use nalgebra::base::storage::{ContiguousStorage, ContiguousStorageMut, Storage, StorageMut};
+use nalgebra::storage::{Storage, StorageMut, IsContiguous};
+//use nalgebra::base::storage::{ContiguousStorage, ContiguousStorageMut, Storage, StorageMut};
 use num_complex::Complex;
-
+use crate::ComplexScalar;
 use crate::{ComplexField, RealField};
 
 /// Computes
@@ -17,8 +18,8 @@ pub fn outer_zip_to<N, D1, S1, R2, C2, S2, F>
     out: &mut Matrix<N, R2, C2, S2>,
     f: F
 )
-where N: Scalar, D1: Dim, S1: ContiguousStorage<N, D1, U1>,
-R2: Dim, C2: Dim, S2: ContiguousStorageMut<N, R2, C2>,
+where N: Scalar, D1: Dim, S1: Storage<N, D1, U1> + IsContiguous,
+R2: Dim, C2: Dim, S2: StorageMut<N, R2, C2> + IsContiguous,
 F: Fn(&N, &N) -> N{
 
     let (nrows, ncols) = out.shape();
@@ -35,7 +36,7 @@ pub fn copy_transmute_to<N, R, C, S1, S2>(
     a: &Matrix<N, R, C, S1>,
     b: &mut Matrix<Complex<N>, R, C, S2>
 )
-where N:Scalar+RealField, R: Dim, C: Dim, S1: Storage<N, R, C>, S2: StorageMut<Complex<N>, R, C>
+where N:Copy+Scalar+RealField, R: Dim, C: Dim, S1: Storage<N, R, C>, S2: StorageMut<Complex<N>, R, C>
 {
     assert!(a.shape() == b.shape(), "copy_transmute_to Dimensions mismatch");
 
@@ -44,16 +45,16 @@ where N:Scalar+RealField, R: Dim, C: Dim, S1: Storage<N, R, C>, S2: StorageMut<C
     }
 }
 
-pub fn gemm<N: Scalar + LapackScalar>(
+pub fn gemm<N: LComplexField>(
         c: &mut DMatrix<N>, a: &DMatrix<N>, b: &DMatrix<N>, a_t: Transpose, b_t: Transpose ){
     let a_sh = a.shape();
     let b_sh = b.shape();
     let c_sh = c.shape();
     let at_sh = if let Transpose::None = a_t {a_sh} else { (a_sh.1, a_sh.0)};
     let bt_sh = if let Transpose::None = b_t {b_sh} else { (b_sh.1, b_sh.0)};
-    assert!(at_sh.1 == bt_sh.0, format!("Shape mismatch: A = {:?}, B = {:?}", at_sh, bt_sh));
-    assert!(at_sh.0 == c_sh.0, format!("Shape mismatch: A = {:?}, C = {:?}", at_sh, c_sh));
-    assert!(bt_sh.1 == c_sh.1, format!("Shape mismatch: B = {:?}, C = {:?}", bt_sh, c_sh));
+    assert_eq!(at_sh.1, bt_sh.0, "Shape mismatch: A = {:?}, B = {:?}", at_sh, bt_sh);
+    assert_eq!(at_sh.0, c_sh.0, "Shape mismatch: A = {:?}, C = {:?}", at_sh, c_sh);
+    assert_eq!(bt_sh.1, c_sh.1, "Shape mismatch: B = {:?}, C = {:?}", bt_sh, c_sh);
 
     unsafe {
         N::gemm(Layout::ColumnMajor, a_t, b_t,
@@ -63,7 +64,7 @@ pub fn gemm<N: Scalar + LapackScalar>(
     };
 }
 
-pub fn ad_mul_to<N: Scalar + LapackScalar>(
+pub fn ad_mul_to<N: LComplexField>(
     a: &DMatrix<N>, b: &DMatrix<N>, c: &mut DMatrix<N>
 ){
     gemm(c, a, b, Transpose::Conjugate, Transpose::None);
@@ -71,7 +72,7 @@ pub fn ad_mul_to<N: Scalar + LapackScalar>(
 
 #[allow(non_snake_case)]
 /// Z <- U^dag A U
-pub fn change_basis_to<N: Scalar+LapackScalar>(
+pub fn change_basis_to<N: LComplexField>(
         A: &DMatrix<N>,
         U: &DMatrix<N>,
         _temp: &mut DMatrix<N>,
@@ -85,7 +86,7 @@ pub fn change_basis_to<N: Scalar+LapackScalar>(
 
 #[allow(non_snake_case)]
 /// Performs U^dag A U
-pub fn change_basis<N: Scalar+LapackScalar>(
+pub fn change_basis<N: LComplexField>(
     A: &DMatrix<N>,
     U: &DMatrix<N>) -> DMatrix<N>{
     let a_sh = A.shape();
@@ -101,7 +102,7 @@ pub fn change_basis<N: Scalar+LapackScalar>(
 
 #[allow(non_snake_case)]
 /// Performs U A U^dag where A is Hermitian
-pub fn unchange_basis<N: Scalar+LapackScalar>(
+pub fn unchange_basis<N: LComplexField>(
     A: &DMatrix<N>,
     U: &DMatrix<N>) -> DMatrix<N>{
     let a_sh = A.shape();
@@ -115,7 +116,7 @@ pub fn unchange_basis<N: Scalar+LapackScalar>(
 }
 
 /// Adds the sum of the matrices in arr to out
-pub fn reduce_sum<N: Scalar+ComplexField, R, C,S1, S2>(
+pub fn reduce_sum<N: LComplexField, R, C,S1, S2>(
     arr: &Vec<Matrix<N, R, C, S1>>,
     out: &mut Matrix<N, R, C, S2>
 )

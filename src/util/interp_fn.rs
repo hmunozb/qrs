@@ -1,15 +1,14 @@
 use num_traits::real::Real;
+use crate::RealScalar;
 
-use crate::RealField;
-
-pub enum InterpBounds<N: RealField>{
+pub enum InterpBounds<N: RealScalar>{
     Ends,
     Zero,
     Fill(N),
     Surround(N, N)
 }
 
-pub struct LinearInterpFn<N: RealField>{
+pub struct LinearInterpFn<N: RealScalar>{
     values: Vec<N>,
     bcs: InterpBounds<N>,
     lo: N,
@@ -17,7 +16,7 @@ pub struct LinearInterpFn<N: RealField>{
     dt: N
 }
 
-impl<N:RealField> LinearInterpFn<N>{
+impl<N:RealScalar> LinearInterpFn<N>{
     pub fn new(values: Vec<N>, lo: N, hi:N, bcs: InterpBounds<N> ) -> Self{
         let n = values.len();
         assert_ne!(n, 0, "LinearInterpFn values must be non-empty.");
@@ -44,7 +43,7 @@ impl<N:RealField> LinearInterpFn<N>{
         }
          else {
             let k: N = (x - self.lo) /self.dt;
-            let m = k.floor();
+            let m = Real::floor(k);
             let dxdt: N  = (x - m * self.dt)/self.dt;
 
             let m = m.to_subset().unwrap() as usize;

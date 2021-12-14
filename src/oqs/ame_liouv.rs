@@ -121,10 +121,10 @@ pub fn ame_liouvillian<R: RealScalar, B: Bath<R>>(
     //      \tilde{\Gamma} = sum_{alpha} gamma[a,b] A_{alpha}[a, b] A_{alpha}^* [a, b]
     // i.e.  gamma[a,b]  .*  sum_{alpha} abs( A[a,b] ).^2 where a != b
     //          and is identically 0 along its diagonal
-    lind_pauli.apply(|_| Complex::zero());
+    lind_pauli.apply(|x| *x=Complex::zero());
     for l_ab in work.linds_ab.iter(){
         lind_pauli.zip_apply(l_ab,
-                             |s, l| s + Complex::from(l.norm_sqr()) )
+                             |s, l| *s += Complex::from(l.norm_sqr()) )
     }
 
     //
@@ -148,7 +148,7 @@ pub fn ame_liouvillian<R: RealScalar, B: Bath<R>>(
 
     // Back to the Pauli rates
     lind_pauli.zip_apply(&work.gamma,
-                         |s, g| s*Complex::from(g));
+                         |s, g| *s *= Complex::from(g));
 
     // ** Control Flow Exception **
     // If only simple rates and the lamb shift were requested, we can return now

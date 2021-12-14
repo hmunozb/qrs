@@ -67,7 +67,7 @@ impl<T: RealScalar+Float> ExponentialSplit<T, C<T>, Op<C<T>>> for DenMatExpiSpli
 
         let expifreqs: Vec<C<T>> = Vec::from_iter(
             freqs.into_iter().map(|v|
-                C::exp(&(-C::i() * C::from(v))) ));
+                C::exp(-C::i() * C::from(v)) ));
 
         let expifreqs = Op::from_column_slice(self.n, self.n, &expifreqs);
 
@@ -95,7 +95,7 @@ impl<T: RealScalar+Float> ExponentialSplit<T, C<T>, Op<C<T>>> for DenMatExpiSpli
 
         for &k in k_arr{
             let expifreqs : Vec<C<T>> = freqs.iter()
-                .map(|v|  C::exp(&(-C::i() * k * C::from(v))))
+                .map(|v|  C::exp(-C::i() * k * C::from(v)) )
                 .collect_vec();
             let expifreqs_arr = Op::from_column_slice(self.n, self.n, &expifreqs);
 
@@ -188,7 +188,7 @@ where C<T>: ComplexScalar<R=T>
 
     fn exp(&mut self, l: Op<C<T>>) -> Op<C<T>>{
         let mut e = l;
-        e.apply( |x| ComplexField::exp(x) );
+        e.apply( |x| *x = (*x).exp() );
         e
     }
 

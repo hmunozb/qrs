@@ -2,7 +2,7 @@ use crate::{RealScalar, ComplexScalar};
 use crate::base::quantum::{QRep, QObj, QRSLinearCombination, QKet, NormedQRep};
 use qrs_core::quantum::LinearOperator;
 use vec_ode::exp::{MidpointExpLinearSolver, ExponentialSplit};
-use vec_ode::{RK45Solver, ODESolver, ODEState, ODESolverBase, AdaptiveODESolver, ODEData, ODEStep};
+use vec_ode::{RK45Solver, ODESolver, ODEState, AdaptiveODESolver, ODEData, ODEStep};
 use rand::Rng;
 use rand_distr::uniform::SampleUniform;
 use rand_distr::Uniform;
@@ -147,7 +147,7 @@ where C::R : SampleUniform + Into<R> ,
                     return (psif, JumpType::NoJump(tf));
                 }
                 ODEState::Err(e) => {
-                    panic!(format!("ODE Error occured: {}", e.msg));
+                    panic!("ODE Error occured: {}", e.msg);
                 }
             }
 

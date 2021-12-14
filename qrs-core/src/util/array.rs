@@ -38,15 +38,17 @@ pub fn kronecker<N: Copy + ClosedMul>(a: ArrayView2<N>, b: ArrayView2<N>) -> Arr
     let c_sh = (a_sh[0] * b_sh[0], a_sh[1] * b_sh[1]);
 
     // index iteration will initalize all elements
-    let mut c : Array2<N> = unsafe{Array2::uninitialized(c_sh)};
+    let mut c = Array2::uninit(c_sh);
+    //let mut c : Array2<N> = unsafe{Array2::uninitialized(c_sh)};
     for ((i,j), aij) in a.indexed_iter(){
         for ((k, l), bkl) in b.indexed_iter(){
             unsafe {
-                    *c.uget_mut((i*b_sh[0] + k, j*b_sh[1] + l)) = *aij * *bkl
+                c.uget_mut((i*b_sh[0] + k, j*b_sh[1] + l))
+                    .write(*aij * *bkl);
             }
         }
     }
-
+    let c = unsafe { c.assume_init()};
     c
 }
 

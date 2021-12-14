@@ -7,6 +7,7 @@ pub type TimeDepMatrix<'a, N> = TimeDependentOperator<'a, <N as ComplexScalar>::
 
 
 mod tests{
+    use crate::ComplexField;
     #[test]
     fn test_time_dep_op(){
         use nalgebra::DMatrix;
