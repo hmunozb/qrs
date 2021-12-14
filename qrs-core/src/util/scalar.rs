@@ -1,6 +1,7 @@
 /// RealScalar and ComplexScalar are the base traits that must be
 /// implemented by the scalars of all QReps
 
+
 pub trait RealScalar :
  nalgebra::RealField +
  vec_ode::RealField
@@ -11,7 +12,9 @@ impl<R> RealScalar for R where R:
 { }
 
 pub trait ComplexScalar :
-nalgebra::ComplexField<RealField=<Self as ComplexScalar>::R>
+Copy +
+nalgebra::ComplexField<RealField=<Self as ComplexScalar>::R> +
+lapack_traits::Scalar<Real=<Self as ComplexScalar>::R>
 {
     type R : RealScalar + Into<Self>;
 

@@ -3,7 +3,7 @@ use itertools::Itertools;
 use lapack_traits::LapackScalar;
 use ndarray::prelude::*;
 use num_complex::Complex;
-use num_traits::{Float};
+use num_traits::{Zero, One, Float};
 use simba::scalar::ClosedMul;
 
 use crate::{ComplexField, RealField};
@@ -63,7 +63,7 @@ pub fn copy_to_complex<N>(
     }
 }
 
-pub fn gemm<N: LapackScalar>(
+pub fn gemm<N: Zero+One+LapackScalar>(
     c: &mut Array2<N>, a: ArrayView2<N>, b: ArrayView2<N>, a_t: Transpose, b_t: Transpose ){
     let mut a_sh = a.raw_dim();
     let mut b_sh = b.raw_dim();
@@ -87,7 +87,7 @@ pub fn gemm<N: LapackScalar>(
     };
 }
 
-pub fn ad_mul_to<N: LapackScalar>(
+pub fn ad_mul_to<N: Zero+One+LapackScalar>(
     a: ArrayView2<N>, b: ArrayView2<N>, c: &mut Array2<N>
 ){
     gemm(c, a, b, Transpose::Conjugate, Transpose::None);
@@ -95,7 +95,7 @@ pub fn ad_mul_to<N: LapackScalar>(
 
 #[allow(non_snake_case)]
 /// Z <- U^dag A U
-pub fn change_basis_to<N: LapackScalar>(
+pub fn change_basis_to<N: Zero+One+LapackScalar>(
     A: ArrayView2<N>,
     U: ArrayView2<N>,
     //_temp: &mut Array2<N>,
@@ -109,7 +109,7 @@ pub fn change_basis_to<N: LapackScalar>(
 
 #[allow(non_snake_case)]
 /// Performs U^dag A U
-pub fn change_basis<N: LapackScalar>(
+pub fn change_basis<N: Zero+One+LapackScalar>(
     A: ArrayView2<N>,
     U: ArrayView2<N>) -> Array2<N>{
     let a_sh = A.shape();
@@ -125,7 +125,7 @@ pub fn change_basis<N: LapackScalar>(
 
 #[allow(non_snake_case)]
 /// Performs U A U^dag where A is Hermitian
-pub fn unchange_basis<N: LapackScalar>(
+pub fn unchange_basis<N: Zero+One+LapackScalar>(
     A: ArrayView2<N>,
     U: ArrayView2<N>) -> Array2<N>{
     let a_sh = A.shape();

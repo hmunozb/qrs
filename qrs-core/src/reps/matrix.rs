@@ -46,11 +46,11 @@ impl<N: ComplexScalar > QRep<N> for DenseQRep<N>
     }
 
     fn kscal(a: N, ket: &mut Self::KetRep){
-        ket.apply(|q| q*a);
+        ket.apply(|q| *q *= a);
     }
 
     fn kaxpy(a: N, ket_x: &Self::KetRep, ket_y: &mut Self::KetRep){
-        ket_y.zip_apply(ket_x, |y,x| a*x + y);
+        ket_y.zip_apply(ket_x, |y,x| *y += a*x );
     }
 }
 
@@ -73,11 +73,11 @@ impl<N, R, C, S> LinearCombination<N, Matrix<N, R, C, S>> for LC<N>
     }
 
     fn scalar_multiply_to(v: &Matrix<N, R, C, S>, k: N, target: &mut Matrix<N, R, C, S>) {
-        target.zip_apply(v, |_t, vi| vi * k);
+        target.zip_apply(v, |t, vi| *t = vi * k);
     }
 
     fn add_scalar_mul(v: &mut Matrix<N, R, C, S>, k: N, other: &Matrix<N, R, C, S>) {
-        v.zip_apply(other, move |y, x| y + (k * x));
+        v.zip_apply(other, move |y, x| *y += k * x);
     }
 
     fn add_assign_ref(v: &mut Matrix<N, R, C, S>, other: &Matrix<N, R, C, S>) {
@@ -114,18 +114,21 @@ for Matrix<N, R, C, S>
     }
 
     fn qaxpy(&mut self, a: N, x: &Self) {
-         self.zip_apply(x, |yi, xi| a*xi +  yi);
+         self.zip_apply(x, |yi, xi| *yi += a*xi );
     }
 
     fn qscal(&mut self, a: N) {
-        self.apply(|x| a*x);
+        self.apply(|x| *x *= a);
     }
 
     fn qaxby(&mut self, a: N, x: &Self, b: N) {
         if b.is_zero(){
-            self.zip_apply(x,|_yi, xi| a*xi);
+            self.zip_apply(x,|yi, xi| *yi = a*xi);
         } else {
-            self.zip_apply(x,  |yi, xi| a*xi + b*yi);
+            self.zip_apply(x,  |yi, xi| {
+                *yi *= b;
+                *yi +=  a * xi;
+            });
         }
     }
 }

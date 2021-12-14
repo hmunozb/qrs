@@ -8,20 +8,20 @@ edition = "2018"
 
 [dependencies]
  alga = "0.9"
-approx = {version = "0.3", features=["num-complex"]}
+approx = {version = "0.5", features=["num-complex"]}
 cauchy = "0.2"
-cblas = "0.2"
-itertools = "0.8"
-lapack-traits = {version = "0.2.2", features=["simba"]}
-lapacke = "0.2"
-nalgebra = "0.21.0"
-ndarray = "0.13"
-ndarray-linalg = {version = "0.12"}
-num-complex = "0.2"
+cblas = "0.4"
+itertools = "0.10.3"
+lapack-traits = {version = "0.4", features=["simba"]}
+lapacke = "0.5"
+nalgebra = "0.29.0"
+ndarray = "0.15"
+ndarray-linalg = {version = "0.14"}
+num-complex = "0.4"
 num-traits = "0.2"
-simba = "0.1"
+simba = "0.6"
 sprs = "0.7"
-vec_ode = {git="https://github.com/hmunozb/vec-ode.git", branch="qrs-dep"}
+vec_ode = {git="https://github.com/hmunozb/vec-ode.git"}
 
 [dev-dependencies]
 openblas-src = {version = "0.9.0", default-features=false, features=["system"]}

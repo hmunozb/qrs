@@ -21,7 +21,7 @@ impl<N: EigScalar> EigVecResult<N, DenseQRep<N>> for Op<N>{
 
     fn into_kets(self) -> Vec<Ket<N>> {
         let mut v = Vec::with_capacity(self.ncols());
-        for col in self.gencolumns(){
+        for col in self.columns(){
             v.push(col.into_owned());
         }
 
